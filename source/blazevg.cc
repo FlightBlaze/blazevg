@@ -525,6 +525,10 @@ Context::Context(float width, float height) {
     this->orthographic(width, height);
 }
 
+Context::Context()
+{
+}
+
 void Context::orthographic(float width, float height) {
     this->MVP = glm::ortho(0.0f, width, height, 0.0f, -1000.0f, 1000.0f);
 }
@@ -555,10 +559,11 @@ void Context::moveTo(float x, float y) {
 
 void Context::lineTo(float x, float y) {
     std::vector<glm::vec2> line {
-        this->mPolylines.back().back(),
+        mCurrentPos,
         glm::vec2(x, y)
     };
     mPolylines.push_back(line);
+    mCurrentPos = glm::vec2(x, y);
 }
 
 void Context::cubicTo(float cp1x, float cp1y, float cp2x, float cp2y, float x, float y) {
@@ -568,6 +573,7 @@ void Context::cubicTo(float cp1x, float cp1y, float cp2x, float cp2y, float x, f
                                                         glm::vec2(x, y),
                                                         32);
     mPolylines.push_back(curve);
+    mCurrentPos = glm::vec2(x, y);
 }
 
 void Context::quadraticTo(float cpx, float cpy, float x, float y) {
@@ -576,6 +582,19 @@ void Context::quadraticTo(float cpx, float cpy, float x, float y) {
                                                         glm::vec2(x, y),
                                                         32);
     mPolylines.push_back(curve);
+    mCurrentPos = glm::vec2(x, y);
+}
+
+float round3f(float t) {
+    return roundf(t * 1000.0f) / 1000.0f;
+}
+
+bool isApproxEqualVec2(glm::vec2 a, glm::vec2 b) {
+    float a1 = round3f(a.x);
+    float a2 = round3f(a.y);
+    float b1 = round3f(b.x);
+    float b2 = round3f(b.y);
+    return a1 == b1 && a2 == b2;
 }
 
 std::vector<glm::vec2> Context::toOnePolyline(std::vector<std::vector<glm::vec2>> polylines) {
@@ -587,7 +606,8 @@ std::vector<glm::vec2> Context::toOnePolyline(std::vector<std::vector<glm::vec2>
         std::vector<glm::vec2> ongoing = polylines.at(i);
         
         // Remove previous point (duplicate)
-        ongoing.pop_back();
+        if(isApproxEqualVec2(onePolyline.back(), ongoing.front()))
+            ongoing.erase(ongoing.begin());
         
         onePolyline.insert(onePolyline.begin(), ongoing.begin(), ongoing.end());
     }
@@ -599,6 +619,169 @@ factory::ShapeMesh Context::internalConvexFill() {
     mesh.vertices = this->toOnePolyline(mPolylines);
     mesh.indices = factory::createIndicesConvex(mesh.vertices.size());
     return mesh;
+}
+
+factory::ShapeMesh Context::internalStroke() {
+    factory::ShapeMesh mesh;
+    auto* allPolylines = &this->mPolylines;
+    
+    bool isLineDash = this->lineDash.gapLength != 0.0f;
+    if(isLineDash) {
+        allPolylines = new std::vector<std::vector<glm::vec2>>();
+        
+        float gapLength = this->lineDash.gapLength;
+        // Add extra space for line caps between
+        // two polylines
+        if(this->lineCap != LineCap::Butt)
+            gapLength += this->lineWidth;
+        
+        for(int i = 0; i < this->mPolylines.size(); i++) {
+            std::vector<std::vector<glm::vec2>> dashed =
+                factory::dashedPolyline(this->mPolylines[i],
+                                        this->lineDash.length,
+                                        gapLength,
+                                        this->lineDash.offset);
+            allPolylines->insert(allPolylines->end(), dashed.begin(), dashed.end());
+        }
+        // Don't forget to free memory at the end
+        // of this function
+    }
+    
+    bool isConnectedWithPrevious = false;
+    for(int i = 0; i < allPolylines->size(); i++) {
+        bool isFirst = i == 0;
+        bool isLast = i == allPolylines->size() - 1;
+        
+        bool addStartCap = false;
+        bool addEndCap = false;
+        if(!isConnectedWithPrevious)
+            addStartCap = true;
+        
+        std::vector<glm::vec2>& polyline = allPolylines->at(i);
+        factory::ShapeMesh polylineMesh = factory::strokePolyline(polyline, this->lineWidth);
+        mesh.add(polylineMesh);
+        if(!isLast) {
+            std::vector<glm::vec2>& nextPolyline = allPolylines->at(i + 1);
+            // If next polyline is connected with current.
+            // When we using bezier curves, the end tip coords
+            // may vary in severay digits after floating point,
+            // so we need to round it before comparing
+            if(isApproxEqualVec2(polyline.back(), nextPolyline.front())) {
+                // Tell next polyline that he is connected
+                // with current
+                isConnectedWithPrevious = true;
+                
+                switch (this->lineJoin) {
+                    case LineJoin::Miter:
+                    {
+                        factory::ShapeMesh joinMesh = factory::miterJoin(polyline,
+                                                                         nextPolyline,
+                                                                         this->lineWidth);
+                        mesh.add(joinMesh);
+                    }
+                        break;
+                    case LineJoin::Round:
+                    {
+                        factory::ShapeMesh joinMesh = factory::roundJoin(polyline,
+                                                                         nextPolyline,
+                                                                         this->lineWidth);
+                        mesh.add(joinMesh);
+                    }
+                        break;
+                    case LineJoin::Bevel:
+                    {
+                        factory::ShapeMesh joinMesh = factory::bevelJoin(polyline,
+                                                                         nextPolyline,
+                                                                         this->lineWidth);
+                        mesh.add(joinMesh);
+                    }
+                        break;
+                    default:
+                        break;
+                }
+            } else {
+                // Tell next polyline that he isn't
+                // connected with current
+                isConnectedWithPrevious = false;
+                addEndCap = true;
+            }
+        } else {
+            addEndCap = true;
+        }
+        
+        if(addStartCap) {
+            glm::vec2 pos = polyline.front();
+            
+            // Opposide polyline first segment direction
+            glm::vec2 dir = polyline.at(0) - polyline.at(1);
+            
+            switch (this->lineCap) {
+                case LineCap::Round:
+                {
+                    factory::ShapeMesh capMesh = factory::roundedCap(pos, dir,
+                                                                     this->lineWidth);
+                    mesh.add(capMesh);
+                }
+                    break;
+                case LineCap::Square:
+                {
+                    factory::ShapeMesh capMesh = factory::squareCap(pos, dir,
+                                                                     this->lineWidth);
+                    mesh.add(capMesh);
+                }
+                    break;
+                default:
+                    break;
+            }
+        }
+        if(addEndCap) {
+            glm::vec2 pos = polyline.back();
+            glm::vec2 dir = polyline.at(polyline.size() - 1) - polyline.at(polyline.size() - 2);
+            
+            switch (this->lineCap) {
+                case LineCap::Round:
+                {
+                    factory::ShapeMesh capMesh = factory::roundedCap(pos, dir,
+                                                                     this->lineWidth);
+                    mesh.add(capMesh);
+                }
+                    break;
+                case LineCap::Square:
+                {
+                    factory::ShapeMesh capMesh = factory::squareCap(pos, dir,
+                                                                     this->lineWidth);
+                    mesh.add(capMesh);
+                }
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+    if(isLineDash) {
+        delete allPolylines;
+    }
+    return mesh;
+}
+
+void Context::convexFill() {
+    
+}
+
+void Context::fill() {
+    
+}
+
+void Context::stroke() {
+    
+}
+
+void Context::textFill(std::wstring str, float x, float y) {
+    
+}
+
+void Context::textFillOnPath(std::wstring str, float x, float y) {
+    
 }
 
 } // namespace bvg

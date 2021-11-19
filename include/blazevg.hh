@@ -1,7 +1,9 @@
 #pragma once
 #include <glm/glm.hpp>
 #include <vector>
+#include <string>
 #include <cmath>
+#include <map>
 
 namespace bvg {
 
@@ -23,8 +25,12 @@ struct Color {
     float r, g, b, a;
 };
 
+namespace colors {
+
 static const Color Black = Color(0.0f, 0.0f, 0.0f);
 static const Color White = Color(1.0f, 1.0f, 1.0f);
+
+} // namespace colors
 
 struct Style {
     enum class Type {
@@ -85,17 +91,23 @@ std::vector<TriangeIndices> createIndicesConvex(int numVertices);
 class Context {
 public:
     Context(float width, float height);
+    Context();
     
     glm::mat4 MVP = glm::mat4(1.0f);
     
     LineJoin lineJoin = LineJoin::Miter;
     LineCap lineCap = LineCap::Butt;
     LineDash lineDash = LineDash();
+    float lineWidth = 2.0f;
     
-    Style fillStyle = SolidColor(Black);
-    Style strokeStyle = SolidColor(Black);
+    Style fillStyle = SolidColor(colors::Black);
+    Style strokeStyle = SolidColor(colors::Black);
     
     int blurRadius = 0;
+    
+    std::map<std::string, void*> fonts;
+    void* font;
+    float fontSize;
     
     void orthographic(float width, float height);
     
@@ -105,6 +117,11 @@ public:
     virtual void convexFill();
     virtual void fill();
     virtual void stroke();
+    virtual void textFill(std::wstring str, float x, float y);
+    virtual void textFillOnPath(std::wstring str, float x, float y);
+    
+    float measureTextWidth(std::wstring str);
+    float measureTextHeight();
     
     void moveTo(float x, float y);
     void lineTo(float x, float y);
