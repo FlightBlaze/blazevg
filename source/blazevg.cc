@@ -539,6 +539,18 @@ void Context::orthographic(float width, float height) {
     this->height = height;
 }
 
+float round3f(float t) {
+    return roundf(t * 1000.0f) / 1000.0f;
+}
+
+bool isApproxEqualVec2(glm::vec2 a, glm::vec2 b) {
+    float a1 = round3f(a.x);
+    float a2 = round3f(a.y);
+    float b1 = round3f(b.x);
+    float b2 = round3f(b.y);
+    return a1 == b1 && a2 == b2;
+}
+
 void Context::beginPath() {
     this->mPolylines.clear();
     this->mIsPolylineClosed = false;
@@ -550,6 +562,10 @@ void Context::closePath() {
         return;
     
     this->mIsPolylineClosed = true;
+    
+    if(isApproxEqualVec2(this->mPolylines.back().back(),
+       this->mPolylines.front().front()))
+        return;
     
     std::vector<glm::vec2> line {
         this->mPolylines.back().back(),
@@ -589,18 +605,6 @@ void Context::quadraticTo(float cpx, float cpy, float x, float y) {
                                                         32);
     mPolylines.push_back(curve);
     mCurrentPos = glm::vec2(x, y);
-}
-
-float round3f(float t) {
-    return roundf(t * 1000.0f) / 1000.0f;
-}
-
-bool isApproxEqualVec2(glm::vec2 a, glm::vec2 b) {
-    float a1 = round3f(a.x);
-    float a2 = round3f(a.y);
-    float b1 = round3f(b.x);
-    float b2 = round3f(b.y);
-    return a1 == b1 && a2 == b2;
 }
 
 std::vector<glm::vec2> Context::toOnePolyline(std::vector<std::vector<glm::vec2>> polylines) {
