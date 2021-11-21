@@ -97,6 +97,9 @@ public:
     Context(float width, float height);
     Context();
     
+    float width = 0;
+    float height = 0;
+    float scale = 1.0f;
     glm::mat4 MVP = glm::mat4(1.0f);
     
     LineJoin lineJoin = LineJoin::Miter;

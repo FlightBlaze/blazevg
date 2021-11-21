@@ -50,6 +50,9 @@ namespace lingrad {
 struct PSConstants {
     Color startColor;
     Color endColor;
+    glm::vec2 startPos;
+    glm::vec2 endPos;
+    glm::vec2 resolution;
 };
 
 static const char* PSSource = R"(
@@ -57,6 +60,9 @@ cbuffer Constants
 {
     float4 g_StartColor;
     float4 g_EndColor;
+    float2 g_StartPos;
+    float2 g_EndPos;
+    float2 g_Resolution;
 };
 
 struct PSInput
@@ -71,7 +77,39 @@ struct PSOutput
 void main(in  PSInput  PSIn,
           out PSOutput PSOut)
 {
-    PSOut.Color = g_StartColor;
+    float2 gradient_start_pos = g_StartPos;
+    float2 gradient_end_pos = g_EndPos;
+    
+
+    float4 color_start = g_StartColor;
+    float4 color_end = g_EndColor;
+    
+    // this is the angle of the gradient in radians
+    float alpha = atan2(
+        gradient_end_pos.y - gradient_start_pos.y,
+        gradient_end_pos.x - gradient_start_pos.x
+    );
+    
+    float gradient_startpos_rotated_x = gradient_start_pos.x * cos(-alpha) - gradient_start_pos.y * sin(-alpha);
+    float gradient_endpos_rotated_x = gradient_end_pos.x * cos(-alpha) - gradient_end_pos.y * sin(-alpha);
+    float gradient_length = gradient_endpos_rotated_x - gradient_startpos_rotated_x;
+    
+    float2 UV = PSIn.Pos / g_Resolution;
+
+    float x_loc_rotated = UV.x * cos(-alpha) - UV.y * sin(-alpha);
+    
+    float t = smoothstep(
+        gradient_startpos_rotated_x,
+        gradient_startpos_rotated_x + gradient_length,
+        x_loc_rotated
+    );
+
+    float4 pixelColor = lerp(
+        color_start,
+        color_end,
+        t
+    );
+    PSOut.Color = pixelColor;
 }
 )";
 
@@ -147,6 +185,30 @@ private:
     void createShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice);
 };
 
+class LinearGradientPipelineState {
+public:
+    LinearGradientPipelineState(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+                            Diligent::TEXTURE_FORMAT colorBufferFormat,
+                            Diligent::TEXTURE_FORMAT depthBufferFormat);
+    LinearGradientPipelineState();
+    
+    bool isInitialized = false;
+    
+    void recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+                  Diligent::TEXTURE_FORMAT colorBufferFormat,
+                  Diligent::TEXTURE_FORMAT depthBufferFormat);
+    
+    Diligent::RefCntAutoPtr<Diligent::IBuffer> VSConstants;
+    Diligent::RefCntAutoPtr<Diligent::IBuffer> PSConstants;
+    Diligent::RefCntAutoPtr<Diligent::IPipelineState> PSO;
+    Diligent::RefCntAutoPtr<Diligent::IShaderResourceBinding> SRB;
+    Diligent::RefCntAutoPtr<Diligent::IShader> PS;
+    Diligent::RefCntAutoPtr<Diligent::IShader> VS;
+    
+private:
+    void createShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice);
+};
+
 } // namespace render
 
 class DiligentContext : public Context {
@@ -170,6 +232,7 @@ private:
     Diligent::TEXTURE_FORMAT mColorBufferFormat;
     Diligent::TEXTURE_FORMAT mDepthBufferFormat;
     
+    render::LinearGradientPipelineState mLinearGradientPSO;
     render::SolidColorPipelineState mSolidColorPSO;
     
     void initPipelineState();

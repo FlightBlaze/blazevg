@@ -535,6 +535,8 @@ Context::Context()
 
 void Context::orthographic(float width, float height) {
     this->MVP = glm::ortho(0.0f, width, height, 0.0f, -1000.0f, 1000.0f);
+    this->width = width;
+    this->height = height;
 }
 
 void Context::beginPath() {
