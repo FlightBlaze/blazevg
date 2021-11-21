@@ -39,12 +39,16 @@ struct Style {
     };
     Type type;
     Color color;
-    Color gradientStart;
-    Color gradientEnd;
+    Color gradientStartColor;
+    float gradientStartX = 0;
+    float gradientStartY = 0;
+    Color gradientEndColor;
+    float gradientEndX = 0;
+    float gradientEndY = 0;
 };
 
 Style SolidColor(Color color);
-Style LinearGradient(Color start, Color end);
+Style LinearGradient(float sx, float sy, float ex, float ey, Color start, Color end);
 
 struct LineDash {
     LineDash();
@@ -114,12 +118,15 @@ public:
     void beginPath();
     void closePath();
     
+    void beginClip();
+    void endClip();
+    
     virtual void convexFill();
     virtual void fill();
     virtual void stroke();
-    virtual void textFill(std::wstring str, float x, float y);
-    virtual void textFillOnPath(std::wstring str, float x, float y);
     
+    virtual void textFill(std::wstring str, float x, float y);
+    virtual void textFillOnPath(std::wstring str);
     float measureTextWidth(std::wstring str);
     float measureTextHeight();
     

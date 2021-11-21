@@ -15,12 +15,10 @@ namespace bvg {
 
 namespace shader {
 
+namespace solidcol {
+
 struct PSConstants {
     Color color;
-};
-
-struct VSConstants {
-    glm::mat4 MVP;
 };
 
 static const char* PSSource = R"(
@@ -44,6 +42,44 @@ void main(in  PSInput  PSIn,
     PSOut.Color = g_Color;
 }
 )";
+
+} // namespace solidcol
+
+namespace lingrad {
+
+struct PSConstants {
+    Color startColor;
+    Color endColor;
+};
+
+static const char* PSSource = R"(
+cbuffer Constants
+{
+    float4 g_StartColor;
+    float4 g_EndColor;
+};
+
+struct PSInput
+{
+    float4 Pos   : SV_POSITION;
+};
+struct PSOutput
+{
+    float4 Color : SV_TARGET;
+};
+
+void main(in  PSInput  PSIn,
+          out PSOutput PSOut)
+{
+    PSOut.Color = g_StartColor;
+}
+)";
+
+} // namespace lingrad
+
+struct VSConstants {
+    glm::mat4 MVP;
+};
 
 static const char* VSSource = R"(
 cbuffer Constants
@@ -87,6 +123,30 @@ private:
     int numIndices = 0;
 };
 
+class SolidColorPipelineState {
+public:
+    SolidColorPipelineState(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+                            Diligent::TEXTURE_FORMAT colorBufferFormat,
+                            Diligent::TEXTURE_FORMAT depthBufferFormat);
+    SolidColorPipelineState();
+    
+    bool isInitialized = false;
+    
+    void recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+                  Diligent::TEXTURE_FORMAT colorBufferFormat,
+                  Diligent::TEXTURE_FORMAT depthBufferFormat);
+    
+    Diligent::RefCntAutoPtr<Diligent::IBuffer> VSConstants;
+    Diligent::RefCntAutoPtr<Diligent::IBuffer> PSConstants;
+    Diligent::RefCntAutoPtr<Diligent::IPipelineState> PSO;
+    Diligent::RefCntAutoPtr<Diligent::IShaderResourceBinding> SRB;
+    Diligent::RefCntAutoPtr<Diligent::IShader> PS;
+    Diligent::RefCntAutoPtr<Diligent::IShader> VS;
+    
+private:
+    void createShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice);
+};
+
 } // namespace render
 
 class DiligentContext : public Context {
@@ -107,12 +167,10 @@ public:
 private:
     Diligent::RefCntAutoPtr<Diligent::IRenderDevice> mRenderDevice;
     Diligent::RefCntAutoPtr<Diligent::IDeviceContext> mDeviceContext;
-    Diligent::RefCntAutoPtr<Diligent::IBuffer> mVSConstants;
-    Diligent::RefCntAutoPtr<Diligent::IBuffer> mPSConstants;
-    Diligent::RefCntAutoPtr<Diligent::IPipelineState> mPSO;
-    Diligent::RefCntAutoPtr<Diligent::IShaderResourceBinding> mSRB;
     Diligent::TEXTURE_FORMAT mColorBufferFormat;
     Diligent::TEXTURE_FORMAT mDepthBufferFormat;
+    
+    render::SolidColorPipelineState mSolidColorPSO;
     
     void initPipelineState();
 };

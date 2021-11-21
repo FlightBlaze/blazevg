@@ -23,14 +23,89 @@ DiligentContext::DiligentContext()
 }
 
 void DiligentContext::initPipelineState() {
+    mSolidColorPSO = render::SolidColorPipelineState(mRenderDevice,
+                                                     mColorBufferFormat,
+                                                     mDepthBufferFormat);
+}
+
+namespace render {
+
+Diligent::InputLayoutDesc createInputLayoutDesc() {
+    Diligent::InputLayoutDesc Desc;
+    Diligent::LayoutElement LayoutElems[] =
+    {
+        // Attribute 0 - vertex position 2D
+        Diligent::LayoutElement{0, 0, 2, Diligent::VT_FLOAT32, Diligent::False}
+    };
+    Desc.LayoutElements = LayoutElems;
+    Desc.NumElements = _countof(LayoutElems);
+    return Desc;
+}
+
+SolidColorPipelineState::
+SolidColorPipelineState(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+                        Diligent::TEXTURE_FORMAT colorBufferFormat,
+                        Diligent::TEXTURE_FORMAT depthBufferFormat) {
+    createShaders(renderDevice);
+    recreate(renderDevice, colorBufferFormat, depthBufferFormat);
+    this->isInitialized = true;
+}
+
+void SolidColorPipelineState::
+createShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice) {
+    Diligent::ShaderCreateInfo ShaderCI;
+    ShaderCI.SourceLanguage = Diligent::SHADER_SOURCE_LANGUAGE_HLSL;
+    ShaderCI.UseCombinedTextureSamplers = Diligent::True;
+    
+    // Create a vertex shader
+    {
+        ShaderCI.Desc.ShaderType = Diligent::SHADER_TYPE_VERTEX;
+        ShaderCI.EntryPoint = "main";
+        ShaderCI.Desc.Name = "blazevg vertex shader";
+        ShaderCI.Source = shader::VSSource;
+        renderDevice->CreateShader(ShaderCI, &VS);
+
+        Diligent::BufferDesc CBDesc;
+        CBDesc.Name = "blazevg VS constants CB";
+        CBDesc.Size = sizeof(shader::VSConstants);
+        CBDesc.Usage = Diligent::USAGE_DYNAMIC;
+        CBDesc.BindFlags = Diligent::BIND_UNIFORM_BUFFER;
+        CBDesc.CPUAccessFlags = Diligent::CPU_ACCESS_WRITE;
+        renderDevice->CreateBuffer(CBDesc, nullptr, &VSConstants);
+    }
+
+    // Create a pixel shader
+    {
+        ShaderCI.Desc.ShaderType = Diligent::SHADER_TYPE_PIXEL;
+        ShaderCI.EntryPoint = "main";
+        ShaderCI.Desc.Name = "blazevg pixel shader";
+        ShaderCI.Source = shader::solidcol::PSSource;
+        renderDevice->CreateShader(ShaderCI, &PS);
+
+        Diligent::BufferDesc CBDesc;
+        CBDesc.Name = "blazevg PS constants CB";
+        CBDesc.Size = sizeof(shader::solidcol::PSConstants);
+        CBDesc.Usage = Diligent::USAGE_DYNAMIC;
+        CBDesc.BindFlags = Diligent::BIND_UNIFORM_BUFFER;
+        CBDesc.CPUAccessFlags = Diligent::CPU_ACCESS_WRITE;
+        renderDevice->CreateBuffer(CBDesc, nullptr, &PSConstants);
+    }
+}
+
+void SolidColorPipelineState::
+recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+         Diligent::TEXTURE_FORMAT colorBufferFormat,
+         Diligent::TEXTURE_FORMAT depthBufferFormat)
+{
     Diligent::GraphicsPipelineStateCreateInfo PSOCreateInfo;
-    PSOCreateInfo.PSODesc.Name = "blazevg PSO";
+    PSOCreateInfo.PSODesc.Name = "blazevg solid color PSO";
     PSOCreateInfo.PSODesc.PipelineType = Diligent::PIPELINE_TYPE_GRAPHICS;
     PSOCreateInfo.GraphicsPipeline.NumRenderTargets = 1;
-    PSOCreateInfo.GraphicsPipeline.RTVFormats[0] = mColorBufferFormat;
-    PSOCreateInfo.GraphicsPipeline.DSVFormat = mDepthBufferFormat;
+    PSOCreateInfo.GraphicsPipeline.RTVFormats[0] = colorBufferFormat;
+    PSOCreateInfo.GraphicsPipeline.DSVFormat = depthBufferFormat;
     PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = Diligent::PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = Diligent::CULL_MODE_NONE;
+    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.StencilEnable = Diligent::True;
     PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = Diligent::False;
 
     Diligent::BlendStateDesc BlendState;
@@ -39,48 +114,8 @@ void DiligentContext::initPipelineState() {
     BlendState.RenderTargets[0].DestBlend = Diligent::BLEND_FACTOR_INV_SRC_ALPHA;
     PSOCreateInfo.GraphicsPipeline.BlendDesc = BlendState;
 
-    Diligent::ShaderCreateInfo ShaderCI;
-    ShaderCI.SourceLanguage = Diligent::SHADER_SOURCE_LANGUAGE_HLSL;
-    ShaderCI.UseCombinedTextureSamplers = Diligent::True;
-
-    // Create a vertex shader
-    Diligent::RefCntAutoPtr<Diligent::IShader> pVS;
-    {
-        ShaderCI.Desc.ShaderType = Diligent::SHADER_TYPE_VERTEX;
-        ShaderCI.EntryPoint = "main";
-        ShaderCI.Desc.Name = "blazevg vertex shader";
-        ShaderCI.Source = shader::VSSource;
-        mRenderDevice->CreateShader(ShaderCI, &pVS);
-
-        Diligent::BufferDesc CBDesc;
-        CBDesc.Name = "VS constants CB";
-        CBDesc.Size = sizeof(shader::VSConstants);
-        CBDesc.Usage = Diligent::USAGE_DYNAMIC;
-        CBDesc.BindFlags = Diligent::BIND_UNIFORM_BUFFER;
-        CBDesc.CPUAccessFlags = Diligent::CPU_ACCESS_WRITE;
-        mRenderDevice->CreateBuffer(CBDesc, nullptr, &mVSConstants);
-    }
-
-    // Create a pixel shader
-    Diligent::RefCntAutoPtr<Diligent::IShader> pPS;
-    {
-        ShaderCI.Desc.ShaderType = Diligent::SHADER_TYPE_PIXEL;
-        ShaderCI.EntryPoint = "main";
-        ShaderCI.Desc.Name = "blazevg pixel shader";
-        ShaderCI.Source = shader::PSSource;
-        mRenderDevice->CreateShader(ShaderCI, &pPS);
-
-        Diligent::BufferDesc CBDesc;
-        CBDesc.Name = "PS constants CB";
-        CBDesc.Size = sizeof(shader::PSConstants);
-        CBDesc.Usage = Diligent::USAGE_DYNAMIC;
-        CBDesc.BindFlags = Diligent::BIND_UNIFORM_BUFFER;
-        CBDesc.CPUAccessFlags = Diligent::CPU_ACCESS_WRITE;
-        mRenderDevice->CreateBuffer(CBDesc, nullptr, &mPSConstants);
-    }
-
-    PSOCreateInfo.pVS = pVS;
-    PSOCreateInfo.pPS = pPS;
+    PSOCreateInfo.pVS = VS;
+    PSOCreateInfo.pPS = PS;
 
     Diligent::LayoutElement LayoutElems[] =
     {
@@ -89,17 +124,20 @@ void DiligentContext::initPipelineState() {
     };
     PSOCreateInfo.GraphicsPipeline.InputLayout.LayoutElements = LayoutElems;
     PSOCreateInfo.GraphicsPipeline.InputLayout.NumElements = _countof(LayoutElems);
+    
     PSOCreateInfo.PSODesc.ResourceLayout.DefaultVariableType = Diligent::SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
 
-    mRenderDevice->CreateGraphicsPipelineState(PSOCreateInfo, &mPSO);
+    renderDevice->CreateGraphicsPipelineState(PSOCreateInfo, &PSO);
 
-    mPSO->GetStaticVariableByName(Diligent::SHADER_TYPE_VERTEX, "Constants")->Set(mVSConstants);
-    mPSO->GetStaticVariableByName(Diligent::SHADER_TYPE_PIXEL, "Constants")->Set(mPSConstants);
+    PSO->GetStaticVariableByName(Diligent::SHADER_TYPE_VERTEX, "Constants")->Set(VSConstants);
+    PSO->GetStaticVariableByName(Diligent::SHADER_TYPE_PIXEL, "Constants")->Set(PSConstants);
 
-    mPSO->CreateShaderResourceBinding(&mSRB, true);
+    PSO->CreateShaderResourceBinding(&SRB, true);
 }
 
-namespace render {
+SolidColorPipelineState::SolidColorPipelineState()
+{
+}
 
 Shape::Shape(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
              factory::ShapeMesh& mesh) {
@@ -132,7 +170,7 @@ void Shape::draw(DiligentContext& context, Style style) {
     Diligent::RefCntAutoPtr<Diligent::IDeviceContext> deviceCtx = context.mDeviceContext;
     {
         Diligent::MapHelper<shader::VSConstants> CBConstants(deviceCtx,
-                                                             context.mVSConstants,
+                                                             context.mSolidColorPSO.VSConstants,
                                                              Diligent::MAP_WRITE,
                                                              Diligent::MAP_FLAG_DISCARD);
         shader::VSConstants c;
@@ -140,11 +178,11 @@ void Shape::draw(DiligentContext& context, Style style) {
         *CBConstants = c;
     }
     {
-        Diligent::MapHelper<shader::PSConstants> CBConstants(deviceCtx,
-                                                             context.mPSConstants,
+        Diligent::MapHelper<shader::solidcol::PSConstants> CBConstants(deviceCtx,
+                                                             context.mSolidColorPSO.PSConstants,
                                                              Diligent::MAP_WRITE,
                                                              Diligent::MAP_FLAG_DISCARD);
-        shader::PSConstants c;
+        shader::solidcol::PSConstants c;
         c.color = style.color;
         *CBConstants = c;
     }
@@ -157,9 +195,9 @@ void Shape::draw(DiligentContext& context, Style style) {
     deviceCtx->SetIndexBuffer(this->indexBuffer, 0,
         Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-    deviceCtx->SetPipelineState(context.mPSO);
+    deviceCtx->SetPipelineState(context.mSolidColorPSO.PSO);
 
-    deviceCtx->CommitShaderResources(context.mSRB, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    deviceCtx->CommitShaderResources(context.mSolidColorPSO.SRB, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
     Diligent::DrawIndexedAttribs DrawAttrs;
     DrawAttrs.IndexType = Diligent::VT_UINT32;
@@ -180,7 +218,7 @@ void DiligentContext::convexFill() {
 void DiligentContext::stroke() {
     factory::ShapeMesh mesh = internalStroke();
     render::Shape shape = render::Shape(mRenderDevice, mesh);
-    shape.draw(*this, this->fillStyle);
+    shape.draw(*this, this->strokeStyle);
 }
 
 } // namespace bvg

@@ -513,11 +513,15 @@ Style SolidColor(Color color) {
     return style;
 }
 
-Style LinearGradient(Color start, Color end) {
+Style LinearGradient(float sx, float sy, float ex, float ey, Color start, Color end) {
     Style style;
     style.type = Style::Type::LinearGradient;
-    style.gradientStart = start;
-    style.gradientEnd = end;
+    style.gradientStartColor = start;
+    style.gradientStartX = sx;
+    style.gradientStartY = sy;
+    style.gradientEndColor = end;
+    style.gradientEndX = ex;
+    style.gradientEndY = ey;
     return style;
 }
 
@@ -660,8 +664,13 @@ factory::ShapeMesh Context::internalStroke() {
         std::vector<glm::vec2>& polyline = allPolylines->at(i);
         factory::ShapeMesh polylineMesh = factory::strokePolyline(polyline, this->lineWidth);
         mesh.add(polylineMesh);
-        if(!isLast) {
-            std::vector<glm::vec2>& nextPolyline = allPolylines->at(i + 1);
+        if(!isLast || mIsPolylineClosed) {
+            std::vector<glm::vec2>* nextOrFirstPolyline;
+            if(mIsPolylineClosed && isLast)
+                nextOrFirstPolyline = &allPolylines->at(0);
+            else
+                nextOrFirstPolyline = &allPolylines->at(i + 1);
+            std::vector<glm::vec2>& nextPolyline = *nextOrFirstPolyline;
             // If next polyline is connected with current.
             // When we using bezier curves, the end tip coords
             // may vary in severay digits after floating point,
@@ -705,8 +714,16 @@ factory::ShapeMesh Context::internalStroke() {
                 isConnectedWithPrevious = false;
                 addEndCap = true;
             }
-        } else {
+        }
+        if(isLast) {
             addEndCap = true;
+        }
+        
+        if(mIsPolylineClosed) {
+            if(isFirst)
+                addStartCap = false;
+            if(isLast)
+                addEndCap = false;
         }
         
         if(addStartCap) {
@@ -780,7 +797,7 @@ void Context::textFill(std::wstring str, float x, float y) {
     
 }
 
-void Context::textFillOnPath(std::wstring str, float x, float y) {
+void Context::textFillOnPath(std::wstring str) {
     
 }
 
