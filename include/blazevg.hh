@@ -56,6 +56,16 @@ struct LineDash {
     float length, gapLength, offset;
 };
 
+enum class BlendingMode {
+    Normal,
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Screen,
+    Difference
+};
+
 namespace factory {
 
 struct TwoPolylines {
@@ -92,6 +102,12 @@ std::vector<TriangeIndices> createIndicesConvex(int numVertices);
 
 } // namespace factory
 
+namespace math {
+    
+glm::mat4 toMatrix3D(glm::mat3 mat2d);
+
+} // namespace math
+
 class Context {
 public:
     Context(float width, float height);
@@ -99,8 +115,10 @@ public:
     
     float width = 0;
     float height = 0;
-    float scale = 1.0f;
-    glm::mat4 MVP = glm::mat4(1.0f);
+    float contentScale = 1.0f;
+    
+    glm::mat4 viewProj = glm::mat4(1.0f);
+    glm::mat3 matrix = glm::mat3(1.0f);
     
     LineJoin lineJoin = LineJoin::Miter;
     LineCap lineCap = LineCap::Butt;
@@ -117,6 +135,13 @@ public:
     float fontSize;
     
     void orthographic(float width, float height);
+    
+    void translate(float x, float y);
+    void scale(float x, float y);
+    void shearX(float x);
+    void shearY(float y);
+    void rotate(float a);
+    void clearTransform();
     
     void beginPath();
     void closePath();

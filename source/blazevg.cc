@@ -1,5 +1,6 @@
 #include <blazevg.hh>
 #include <glm/gtx/transform.hpp>
+#include <glm/gtx/matrix_transform_2d.hpp>
 #include <glm/gtx/vector_angle.hpp>
 
 namespace bvg {
@@ -531,7 +532,7 @@ Context::Context()
 }
 
 void Context::orthographic(float width, float height) {
-    this->MVP = glm::ortho(0.0f, width, height, 0.0f, -1000.0f, 1000.0f);
+    this->viewProj = glm::ortho(0.0f, width, height, 0.0f, -1000.0f, 1000.0f);
     this->width = width;
     this->height = height;
 }
@@ -810,6 +811,58 @@ void Context::textFill(std::wstring str, float x, float y) {
 
 void Context::textFillOnPath(std::wstring str) {
     
+}
+
+void Context::translate(float x, float y) {
+    this->matrix = glm::translate(glm::mat3(1.0f), glm::vec2(x, y)) * this->matrix;
+}
+
+void Context::scale(float x, float y) {
+    this->matrix = glm::scale(glm::mat3(1.0f), glm::vec2(x, y)) * this->matrix;
+}
+
+void Context::shearX(float x) {
+    this->matrix = glm::shearX(glm::mat3(1.0f), x) * this->matrix;
+}
+
+void Context::shearY(float y) {
+    this->matrix = glm::shearY(glm::mat3(1.0f), y) * this->matrix;
+}
+
+void Context::rotate(float a) {
+    this->matrix = glm::rotate(glm::mat3(1.0f), a) * this->matrix;
+}
+
+void Context::clearTransform() {
+    this->matrix = glm::mat3(1.0f);
+}
+
+glm::mat4 math::toMatrix3D(glm::mat3 mat2d) {
+    float a, b, c, d, tx, ty;
+    // a c tx
+    // b d ty
+    // 0 0 1
+    mat2d = glm::transpose(mat2d);
+    a = mat2d[0][0];
+    c = mat2d[0][1];
+    tx = mat2d[0][2];
+    b = mat2d[1][0];
+    d = mat2d[1][1];
+    ty = mat2d[1][2];
+    // a b 0 0
+    // c d 0 0
+    // 0 0 1 0
+    // tx ty 0 1
+    glm::mat4 mat3d = glm::mat4(0.0f);
+    mat3d[0][0] = a;
+    mat3d[1][0] = b;
+    mat3d[0][1] = c;
+    mat3d[1][1] = d;
+    mat3d[0][3] = tx;
+    mat3d[1][3] = ty;
+    mat3d[2][2] = 1;
+    mat3d[3][3] = 1;
+    return glm::transpose(mat3d);
 }
 
 } // namespace bvg

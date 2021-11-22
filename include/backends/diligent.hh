@@ -209,6 +209,10 @@ private:
     void createShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice);
 };
 
+struct PipelineConfiguration {
+    
+};
+
 } // namespace render
 
 class DiligentContext : public Context {

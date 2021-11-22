@@ -278,6 +278,8 @@ void Shape::draw(DiligentContext& context, Style& style) {
     deviceCtx->SetIndexBuffer(this->indexBuffer, 0,
         Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     
+    glm::mat4 MVP = context.viewProj * math::toMatrix3D(context.matrix);
+    
     switch(style.type) {
         case Style::Type::SolidColor:
         {
@@ -288,7 +290,7 @@ void Shape::draw(DiligentContext& context, Style& style) {
                                                                      Diligent::MAP_WRITE,
                                                                      Diligent::MAP_FLAG_DISCARD);
                 shader::VSConstants c;
-                c.MVP = glm::transpose(context.MVP);
+                c.MVP = glm::transpose(MVP);
                 *CBConstants = c;
             }
             {
@@ -314,7 +316,7 @@ void Shape::draw(DiligentContext& context, Style& style) {
                                                                      Diligent::MAP_WRITE,
                                                                      Diligent::MAP_FLAG_DISCARD);
                 shader::VSConstants c;
-                c.MVP = glm::transpose(context.MVP);
+                c.MVP = glm::transpose(MVP);
                 *CBConstants = c;
             }
             {
@@ -326,10 +328,10 @@ void Shape::draw(DiligentContext& context, Style& style) {
                 shader::lingrad::PSConstants c;
                 c.startColor = style.gradientStartColor;
                 c.endColor = style.gradientEndColor;
-                c.startPos = glm::vec2(context.MVP * glm::vec4(style.gradientStartX,
+                c.startPos = glm::vec2(MVP * glm::vec4(style.gradientStartX,
                                                                style.gradientStartY,
                                                                0.0f, 1.0f));
-                c.endPos = glm::vec2(context.MVP * glm::vec4(style.gradientEndX,
+                c.endPos = glm::vec2(MVP * glm::vec4(style.gradientEndX,
                                                              style.gradientEndY,
                                                              0.0f, 1.0f));
                 // Convert range (-1.0, 1.0) to (0.0, 1.0)
@@ -338,7 +340,7 @@ void Shape::draw(DiligentContext& context, Style& style) {
                 c.endPos = (c.endPos + 1.0f) / 2.0f;
                 c.startPos.y = 1.0f - c.startPos.y;
                 c.endPos.y = 1.0f - c.endPos.y;
-                c.resolution = glm::vec2(context.width, context.height) * context.scale;
+                c.resolution = glm::vec2(context.width, context.height) * context.contentScale;
                 *CBConstants = c;
             }
             deviceCtx->SetPipelineState(context.mLinearGradientPSO.PSO);
