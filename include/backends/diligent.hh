@@ -153,7 +153,7 @@ public:
     Shape(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
           factory::ShapeMesh& mesh);
     
-    void draw(DiligentContext& context, Style style);
+    void draw(DiligentContext& context, Style& style);
     
 private:
     Diligent::RefCntAutoPtr<Diligent::IBuffer> vertexBuffer;

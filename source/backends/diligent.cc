@@ -267,7 +267,7 @@ Shape::Shape(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
     this->numIndices = (int)mesh.indices.size() * 3;
 }
 
-void Shape::draw(DiligentContext& context, Style style) {
+void Shape::draw(DiligentContext& context, Style& style) {
     Diligent::RefCntAutoPtr<Diligent::IDeviceContext> deviceCtx = context.mDeviceContext;
     
     Diligent::Uint64   offset = 0;

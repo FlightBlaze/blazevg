@@ -392,15 +392,12 @@ float tAtLength(float length, std::vector<float>& lengths) {
     size_t pointBeforeLength = 0;
     float previousLength = 0.0f;
     float currentLength = 0.0f;
-    float localT = 0.0f;
-    if(lengths.size() > 0) {
-        localT = fminf(length, lengths.at(0));
-    }
+    float localT = 1.0f;
     for (size_t i = 0; i < lengths.size(); i++) {
         previousLength = currentLength;
         currentLength += lengths.at(i);
+        pointBeforeLength = i;
         if (length < currentLength) {
-            pointBeforeLength = i;
             localT = (length - previousLength) / lengths.at(i);
             break;
         }
@@ -466,7 +463,7 @@ ShapeMesh roundedCap(glm::vec2 position, glm::vec2 direction, const float diamet
     
     float dirAngle = atan2f(direction.x, direction.y);
     float start = glm::orientedAngle(direction, Ad) + dirAngle;
-    float end = glm::orientedAngle(direction, Bd) + dirAngle + 0.1f;
+    float end = glm::orientedAngle(direction, Bd) + dirAngle + 0.15f;
     
     std::vector<glm::vec2> curve = createArc(start, end, radius, 32, position);
     mesh.vertices.insert(mesh.vertices.end(), curve.begin(), curve.end());
@@ -636,6 +633,7 @@ factory::ShapeMesh Context::internalStroke() {
     auto* allPolylines = &this->mPolylines;
     
     bool isLineDash = this->lineDash.gapLength != 0.0f;
+    bool isStartEndTooClose = true;
     if(isLineDash) {
         allPolylines = new std::vector<std::vector<glm::vec2>>();
         
@@ -653,6 +651,13 @@ factory::ShapeMesh Context::internalStroke() {
                                         this->lineDash.offset);
             allPolylines->insert(allPolylines->end(), dashed.begin(), dashed.end());
         }
+        
+        // If shape was closed and then dashed, it
+        // isn't a fact that it's still closed, so
+        // we need to make a check
+        isStartEndTooClose = isApproxEqualVec2(allPolylines->front().front(),
+                                               allPolylines->back().back());
+        
         // Don't forget to free memory at the end
         // of this function
     }
@@ -725,7 +730,7 @@ factory::ShapeMesh Context::internalStroke() {
             addEndCap = true;
         }
         
-        if(mIsPolylineClosed) {
+        if(mIsPolylineClosed && isStartEndTooClose) {
             if(isFirst)
                 addStartCap = false;
             if(isLast)
