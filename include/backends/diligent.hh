@@ -288,6 +288,11 @@ private:
     void createShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice);
 };
 
+static Diligent::Uint32 GlyphQuadIndices[] =
+{
+        0,1,2, 2,3,0
+};
+
 class GlyphMSDFShaders {
 public:
     GlyphMSDFShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice);
@@ -297,6 +302,7 @@ public:
     Diligent::RefCntAutoPtr<Diligent::IBuffer> PSConstants;
     Diligent::RefCntAutoPtr<Diligent::IShader> PS;
     Diligent::RefCntAutoPtr<Diligent::IShader> VS;
+    Diligent::RefCntAutoPtr<Diligent::IBuffer> quadIndexBuffer;
 };
 
 struct PipelineConfiguration {
@@ -318,14 +324,34 @@ public:
 class DiligentFont : public Font {
 public:
     DiligentFont(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+                 Diligent::TEXTURE_FORMAT colorBufferFormat,
+                 Diligent::TEXTURE_FORMAT depthBufferFormat,
                  std::string& json,
+                 void* imageData,
+                 int width,
+                 int height,
+                 int numChannels,
                  DiligentContext& context);
     
     std::unordered_map<int, render::CharacterQuad> chars;
     
     void loadCharacter(Character& character);
     
+    Diligent::RefCntAutoPtr<Diligent::IPipelineState> PSO;
+    Diligent::RefCntAutoPtr<Diligent::IShaderResourceBinding> SRB;
+    Diligent::RefCntAutoPtr<Diligent::ITextureView> textureSRV;
+    
+    void recreatePipelineState(Diligent::TEXTURE_FORMAT colorBufferFormat,
+                               Diligent::TEXTURE_FORMAT depthBufferFormat);
+    
 private:
+    void createTexture(Diligent::TEXTURE_FORMAT colorBufferFormat,
+                       void* imageData,
+                       int width,
+                       int height,
+                       int numChannels);
+    
+    Diligent::RefCntAutoPtr<Diligent::ITexture> mTexture;
     Diligent::RefCntAutoPtr<Diligent::IRenderDevice> mRenderDevice;
     DiligentContext& mContext;
 };

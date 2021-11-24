@@ -452,6 +452,16 @@ GlyphMSDFShaders::GlyphMSDFShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevi
         CBDesc.CPUAccessFlags = Diligent::CPU_ACCESS_WRITE;
         renderDevice->CreateBuffer(CBDesc, nullptr, &PSConstants);
     }
+    
+    Diligent::BufferDesc IndBuffDesc;
+    IndBuffDesc.Name = "blazevg glyph quad index buffer";
+    IndBuffDesc.Usage = Diligent::USAGE_IMMUTABLE;
+    IndBuffDesc.BindFlags = Diligent::BIND_INDEX_BUFFER;
+    IndBuffDesc.Size = sizeof(GlyphQuadIndices);
+    Diligent::BufferData IBData;
+    IBData.pData = GlyphQuadIndices;
+    IBData.DataSize = sizeof(GlyphQuadIndices);
+    renderDevice->CreateBuffer(IndBuffDesc, &IBData, &quadIndexBuffer);
 }
 
 GlyphMSDFShaders::GlyphMSDFShaders()
@@ -479,17 +489,124 @@ void DiligentContext::loadFontFromMemory(std::string& json,
                         int height,
                         int numChannels)
 {
-    DiligentFont* font = new DiligentFont(mRenderDevice, json, *this);
+    DiligentFont* font = new DiligentFont(mRenderDevice,
+                                          mColorBufferFormat,
+                                          mDepthBufferFormat,
+                                          json,
+                                          imageData,
+                                          width,
+                                          height,
+                                          numChannels,
+                                          *this);
     this->fonts[fontName] = static_cast<Font*>(font);
 }
 
 DiligentFont::DiligentFont(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+                           Diligent::TEXTURE_FORMAT colorBufferFormat,
+                           Diligent::TEXTURE_FORMAT depthBufferFormat,
                            std::string& json,
+                           void* imageData,
+                           int width,
+                           int height,
+                           int numChannels,
                            DiligentContext& context):
     mRenderDevice(renderDevice),
     mContext(context)
 {
+    createTexture(colorBufferFormat, imageData, width, height, numChannels);
+    recreatePipelineState(colorBufferFormat, depthBufferFormat);
     this->parseJson(json);
+}
+
+void DiligentFont::createTexture(Diligent::TEXTURE_FORMAT colorBufferFormat,
+                                 void* imageData,
+                                 int width,
+                                 int height,
+                                 int numChannels)
+{
+    assert(imageData != nullptr);
+    
+    int ChannelDepth = 8;
+    int RGBAStride = width * numChannels * ChannelDepth;// / 8;
+    // RGBAStride = (RGBAStride + 3) & (-4);
+
+    Diligent::TextureSubResData SubRes;
+    SubRes.Stride = RGBAStride;
+    SubRes.pData = imageData;
+
+    Diligent::TextureData TexData;
+    TexData.NumSubresources = 1;
+    TexData.pSubResources = &SubRes;
+
+    Diligent::TextureDesc TexDesc;
+    TexDesc.Type = Diligent::RESOURCE_DIM_TEX_2D;
+    TexDesc.Width = width;
+    TexDesc.Height = height;
+    TexDesc.MipLevels = 1;
+    TexDesc.Format = colorBufferFormat;
+    TexDesc.BindFlags = Diligent::BIND_SHADER_RESOURCE;
+    mRenderDevice->CreateTexture(TexDesc, &TexData, &mTexture);
+    textureSRV = mTexture->GetDefaultView(Diligent::TEXTURE_VIEW_SHADER_RESOURCE);
+}
+
+void DiligentFont::recreatePipelineState(Diligent::TEXTURE_FORMAT colorBufferFormat,
+                                         Diligent::TEXTURE_FORMAT depthBufferFormat) {
+    Diligent::GraphicsPipelineStateCreateInfo PSOCreateInfo;
+    PSOCreateInfo.PSODesc.Name = "blazevg font PSO";
+    PSOCreateInfo.PSODesc.PipelineType = Diligent::PIPELINE_TYPE_GRAPHICS;
+    PSOCreateInfo.GraphicsPipeline.NumRenderTargets = 1;
+    PSOCreateInfo.GraphicsPipeline.RTVFormats[0] = colorBufferFormat;
+    PSOCreateInfo.GraphicsPipeline.DSVFormat = depthBufferFormat;
+    PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = Diligent::PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = Diligent::CULL_MODE_NONE;
+    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.StencilEnable = Diligent::True;
+    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = Diligent::False;
+
+    Diligent::BlendStateDesc BlendState;
+    BlendState.RenderTargets[0].BlendEnable = Diligent::True;
+    BlendState.RenderTargets[0].SrcBlend = Diligent::BLEND_FACTOR_SRC_ALPHA;
+    BlendState.RenderTargets[0].DestBlend = Diligent::BLEND_FACTOR_INV_SRC_ALPHA;
+    PSOCreateInfo.GraphicsPipeline.BlendDesc = BlendState;
+
+    PSOCreateInfo.pVS = mContext.mGlyphShaders.VS;
+    PSOCreateInfo.pPS = mContext.mGlyphShaders.PS;
+
+    Diligent::LayoutElement LayoutElems[] =
+    {
+        // Attribute 0 - vertex position
+        Diligent::LayoutElement{0, 0, 2, Diligent::VT_FLOAT32, Diligent::False},
+        // Attribute 1 - texture coordinate
+        Diligent::LayoutElement{1, 0, 2, Diligent::VT_FLOAT32, Diligent::False}
+    };
+    PSOCreateInfo.GraphicsPipeline.InputLayout.LayoutElements = LayoutElems;
+    PSOCreateInfo.GraphicsPipeline.InputLayout.NumElements = _countof(LayoutElems);
+    
+    PSOCreateInfo.PSODesc.ResourceLayout.DefaultVariableType = Diligent::SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
+    
+    Diligent::ShaderResourceVariableDesc variables[] =
+    {
+        { Diligent::SHADER_TYPE_PIXEL, "g_Texture", Diligent::SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE }
+    };
+    PSOCreateInfo.PSODesc.ResourceLayout.Variables = variables;
+    PSOCreateInfo.PSODesc.ResourceLayout.NumVariables = _countof(variables);
+
+    Diligent::ImmutableSamplerDesc samplers[] =
+    {
+        { Diligent::SHADER_TYPE_PIXEL, "g_Texture", Diligent::Sam_LinearClamp }
+    };
+    PSOCreateInfo.PSODesc.ResourceLayout.ImmutableSamplers = samplers;
+    PSOCreateInfo.PSODesc.ResourceLayout.NumImmutableSamplers = _countof(samplers);
+
+    mRenderDevice->CreateGraphicsPipelineState(PSOCreateInfo, &PSO);
+
+    PSO->GetStaticVariableByName(Diligent::SHADER_TYPE_VERTEX, "Constants")->
+        Set(mContext.mGlyphShaders.VSConstants);
+    PSO->GetStaticVariableByName(Diligent::SHADER_TYPE_PIXEL, "Constants")->
+        Set(mContext.mGlyphShaders.PSConstants);
+
+    PSO->CreateShaderResourceBinding(&SRB, true);
+    SRB->GetVariableByName(Diligent::SHADER_TYPE_PIXEL, "g_Texture")->
+        Set(textureSRV);
 }
 
 void DiligentFont::loadCharacter(Character& character) {
