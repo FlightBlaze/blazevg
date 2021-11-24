@@ -1,6 +1,8 @@
 #pragma once
 #include <blazevg.hh>
 
+#include <unordered_map>
+
 #ifdef __APPLE__
 #define PLATFORM_MACOS 1
 #else
@@ -115,6 +117,83 @@ void main(in  PSInput  PSIn,
 
 } // namespace lingrad
 
+namespace msdf { // namespace msdf
+
+static const char* GlyphVSSource = R"(
+cbuffer Constants
+{
+    float4x4 g_ModelViewProj;
+};
+
+struct VSInput
+{
+    float2 Pos   : ATTRIB0;
+    float2 TexCoord : ATTRIB1;
+};
+
+struct PSInput
+{
+    float4 Pos   : SV_POSITION;
+    float2 UV    : TEX_COORD;
+};
+
+void main(in  VSInput VSIn,
+          out PSInput PSIn)
+{
+    PSIn.Pos = mul(float4(VSIn.Pos, 0.0, 1.0), g_ModelViewProj);
+    PSIn.UV = VSIn.TexCoord;
+}
+)";
+
+struct PSConstants {
+    glm::vec4 color;
+    float distanceRange;
+};
+
+static const char* PSSource = R"(
+cbuffer Constants
+{
+    float4 g_Color;
+    float g_DistanceRange;
+};
+
+Texture2D    g_Texture;
+SamplerState g_Texture_sampler;
+
+struct PSInput
+{
+    float4 Pos   : SV_POSITION;
+    float2 UV    : TEX_COORD;
+};
+struct PSOutput
+{
+    float4 Color : SV_TARGET;
+};
+
+float median(float r, float g, float b) {
+    return max(min(r, g), min(max(r, g), b));
+}
+
+void main(in  PSInput  PSIn,
+          out PSOutput PSOut)
+{
+#if defined(DESKTOP_GL) || defined(GL_ES)
+    float2 UV = float2(PSIn.UV.x, 1.0 - PSIn.UV.y);
+#else
+    float2 UV = PSIn.UV;
+#endif
+    float4 MSD = g_Texture.Sample(g_Texture_sampler, UV);
+    float SDF = median(MSD.r, MSD.g, MSD.b);
+    float Opacity = clamp(SDF * g_DistanceRange, 0.0, 1.0);
+    if(Opacity < 0.5)
+        discard;
+    PSOut.Color = g_Color;
+    PSOut.Color.a *= Opacity;
+}
+)";
+
+}
+
 struct VSConstants {
     glm::mat4 MVP;
 };
@@ -209,14 +288,51 @@ private:
     void createShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice);
 };
 
-struct PipelineConfiguration {
+class GlyphMSDFShaders {
+public:
+    GlyphMSDFShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice);
+    GlyphMSDFShaders();
     
+    Diligent::RefCntAutoPtr<Diligent::IBuffer> VSConstants;
+    Diligent::RefCntAutoPtr<Diligent::IBuffer> PSConstants;
+    Diligent::RefCntAutoPtr<Diligent::IShader> PS;
+    Diligent::RefCntAutoPtr<Diligent::IShader> VS;
+};
+
+struct PipelineConfiguration {
+    BlendingMode blendingMode;
+};
+
+class CharacterQuad {
+public:
+    CharacterQuad(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+                  Font::Character& c, int size);
+    CharacterQuad();
+    
+    int advance = 0, height = 0;
+    Diligent::RefCntAutoPtr<Diligent::IBuffer> vertexBuffer;
 };
 
 } // namespace render
 
+class DiligentFont : public Font {
+public:
+    DiligentFont(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+                 std::string& json,
+                 DiligentContext& context);
+    
+    std::unordered_map<int, render::CharacterQuad> chars;
+    
+    void loadCharacter(Character& character);
+    
+private:
+    Diligent::RefCntAutoPtr<Diligent::IRenderDevice> mRenderDevice;
+    DiligentContext& mContext;
+};
+
 class DiligentContext : public Context {
 public:
+    friend DiligentFont;
     friend render::Shape;
     
     DiligentContext(float width, float height,
@@ -230,6 +346,13 @@ public:
     void convexFill();
     void stroke();
     
+    void loadFontFromMemory(std::string& json,
+                            std::string fontName,
+                            void* imageData,
+                            int width,
+                            int height,
+                            int numChannels);
+    
 private:
     Diligent::RefCntAutoPtr<Diligent::IRenderDevice> mRenderDevice;
     Diligent::RefCntAutoPtr<Diligent::IDeviceContext> mDeviceContext;
@@ -238,6 +361,7 @@ private:
     
     render::LinearGradientPipelineState mLinearGradientPSO;
     render::SolidColorPipelineState mSolidColorPSO;
+    render::GlyphMSDFShaders mGlyphShaders;
     
     void initPipelineState();
 };

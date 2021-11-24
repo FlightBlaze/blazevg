@@ -30,6 +30,8 @@ void DiligentContext::initPipelineState() {
     mLinearGradientPSO = render::LinearGradientPipelineState(mRenderDevice,
                                                      mColorBufferFormat,
                                                      mDepthBufferFormat);
+    
+    mGlyphShaders = render::GlyphMSDFShaders(mRenderDevice);
 }
 
 namespace render {
@@ -110,6 +112,10 @@ recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
     PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = Diligent::PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = Diligent::CULL_MODE_NONE;
     PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.StencilEnable = Diligent::True;
+    Diligent::StencilOpDesc StencilDesc;
+    // StencilDesc.StencilFunc = Diligent::COMPARISON_FUNC_NEVER;
+    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.FrontFace = StencilDesc;
+    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.BackFace = StencilDesc;
     PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = Diligent::False;
 
     Diligent::BlendStateDesc BlendState;
@@ -207,6 +213,13 @@ recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
     PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = Diligent::PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = Diligent::CULL_MODE_NONE;
     PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.StencilEnable = Diligent::True;
+    Diligent::StencilOpDesc StencilDesc;
+    StencilDesc.StencilFunc = Diligent::COMPARISON_FUNC_ALWAYS;
+    StencilDesc.StencilPassOp = Diligent::STENCIL_OP_REPLACE;
+    StencilDesc.StencilFailOp = StencilDesc.StencilPassOp;
+    StencilDesc.StencilDepthFailOp = StencilDesc.StencilPassOp;
+    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.FrontFace = StencilDesc;
+    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.BackFace = StencilDesc;
     PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = Diligent::False;
 
     Diligent::BlendStateDesc BlendState;
@@ -356,7 +369,93 @@ void Shape::draw(DiligentContext& context, Style& style) {
     DrawAttrs.NumIndices = this->numIndices;
     DrawAttrs.Flags = Diligent::DRAW_FLAG_VERIFY_ALL;
 
+    deviceCtx->SetStencilRef(1);
+    
     deviceCtx->DrawIndexed(DrawAttrs);
+}
+
+struct CharVertex {
+    glm::vec2 position;
+    glm::vec2 texCoord;
+};
+
+CharacterQuad::CharacterQuad(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+                             Font::Character& c, int size)
+{
+    this->advance = c.advance;
+    
+    glm::vec2 start = glm::vec2(c.planeBounds.left, c.planeBounds.top) * (float)size;
+    glm::vec2 end = glm::vec2(c.planeBounds.right, c.planeBounds.bottom) * (float)size;
+    
+    this->height = end.y - start.y;
+    
+    glm::vec2 texStart = glm::vec2(c.atlasBounds.left, c.atlasBounds.top);
+    glm::vec2 texEnd = glm::vec2(c.atlasBounds.right, c.atlasBounds.bottom);
+    
+    CharVertex vertices[] = {
+        { start, texStart },
+        { glm::vec2(end.x, start.y), glm::vec2(texEnd.x, texStart.y) },
+        { glm::vec2(end.x, end.y), glm::vec2(texEnd.x, texEnd.y) },
+        { glm::vec2(start.x, end.y), glm::vec2(texStart.x, texEnd.y) }
+    };
+    
+    Diligent::BufferDesc VertBuffDesc;
+    VertBuffDesc.Name = "blazevg font character vertex buffer";
+    VertBuffDesc.Usage = Diligent::USAGE_IMMUTABLE;
+    VertBuffDesc.BindFlags = Diligent::BIND_VERTEX_BUFFER;
+    VertBuffDesc.Size = sizeof(vertices);
+    Diligent::BufferData VBData;
+    VBData.pData = vertices;
+    VBData.DataSize = sizeof(vertices);
+    renderDevice->CreateBuffer(VertBuffDesc, &VBData, &this->vertexBuffer);
+}
+
+CharacterQuad::CharacterQuad()
+{
+}
+
+GlyphMSDFShaders::GlyphMSDFShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice) {
+    Diligent::ShaderCreateInfo ShaderCI;
+    ShaderCI.SourceLanguage = Diligent::SHADER_SOURCE_LANGUAGE_HLSL;
+    ShaderCI.UseCombinedTextureSamplers = Diligent::True;
+    
+    // Create a vertex shader
+    {
+        ShaderCI.Desc.ShaderType = Diligent::SHADER_TYPE_VERTEX;
+        ShaderCI.EntryPoint = "main";
+        ShaderCI.Desc.Name = "blazevg glyph msdf vertex shader";
+        ShaderCI.Source = shader::msdf::GlyphVSSource;
+        renderDevice->CreateShader(ShaderCI, &VS);
+
+        Diligent::BufferDesc CBDesc;
+        CBDesc.Name = "blazevg VS constants CB";
+        CBDesc.Size = sizeof(shader::VSConstants);
+        CBDesc.Usage = Diligent::USAGE_DYNAMIC;
+        CBDesc.BindFlags = Diligent::BIND_UNIFORM_BUFFER;
+        CBDesc.CPUAccessFlags = Diligent::CPU_ACCESS_WRITE;
+        renderDevice->CreateBuffer(CBDesc, nullptr, &VSConstants);
+    }
+
+    // Create a pixel shader
+    {
+        ShaderCI.Desc.ShaderType = Diligent::SHADER_TYPE_PIXEL;
+        ShaderCI.EntryPoint = "main";
+        ShaderCI.Desc.Name = "blazevg glyph msdf pixel shader";
+        ShaderCI.Source = shader::msdf::PSSource;
+        renderDevice->CreateShader(ShaderCI, &PS);
+
+        Diligent::BufferDesc CBDesc;
+        CBDesc.Name = "blazevg glyph msdf PS constants CB";
+        CBDesc.Size = sizeof(shader::msdf::PSConstants);
+        CBDesc.Usage = Diligent::USAGE_DYNAMIC;
+        CBDesc.BindFlags = Diligent::BIND_UNIFORM_BUFFER;
+        CBDesc.CPUAccessFlags = Diligent::CPU_ACCESS_WRITE;
+        renderDevice->CreateBuffer(CBDesc, nullptr, &PSConstants);
+    }
+}
+
+GlyphMSDFShaders::GlyphMSDFShaders()
+{
 }
 
 } // namespace render
@@ -371,6 +470,30 @@ void DiligentContext::stroke() {
     factory::ShapeMesh mesh = internalStroke();
     render::Shape shape = render::Shape(mRenderDevice, mesh);
     shape.draw(*this, this->strokeStyle);
+}
+
+void DiligentContext::loadFontFromMemory(std::string& json,
+                        std::string fontName,
+                        void* imageData,
+                        int width,
+                        int height,
+                        int numChannels)
+{
+    DiligentFont* font = new DiligentFont(mRenderDevice, json, *this);
+    this->fonts[fontName] = static_cast<Font*>(font);
+}
+
+DiligentFont::DiligentFont(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+                           std::string& json,
+                           DiligentContext& context):
+    mRenderDevice(renderDevice),
+    mContext(context)
+{
+    this->parseJson(json);
+}
+
+void DiligentFont::loadCharacter(Character& character) {
+    this->chars[character.unicode] = render::CharacterQuad(mRenderDevice, character, this->size);
 }
 
 } // namespace bvg

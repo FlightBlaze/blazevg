@@ -91,6 +91,8 @@ ShapeMesh miterJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const 
 
 TwoPolylines dividePolyline(std::vector<glm::vec2>& points, float t);
 
+glm::vec2 getPointAtT(std::vector<glm::vec2>& points, float t);
+
 std::vector<std::vector<glm::vec2>> dashedPolyline(std::vector<glm::vec2>& points,
                                                    float dashLength, float gapLength,
                                                    float offset = 0.0f);
@@ -107,6 +109,30 @@ namespace math {
 glm::mat4 toMatrix3D(glm::mat3 mat2d);
 
 } // namespace math
+
+class Font {
+public:
+    struct Atlas {
+        int width, height;
+    };
+    
+    struct Bounds {
+        float top, left, right, bottom;
+    };
+    
+    struct Character {
+        int unicode, advance;
+        Bounds planeBounds, atlasBounds;
+    };
+    
+    Atlas atlas;
+    int size, lineHeight, baseline;
+    int distanceRange;
+    
+protected:
+    virtual void loadCharacter(Character& character);
+    void parseJson(std::string& json);
+};
 
 class Context {
 public:
@@ -130,9 +156,17 @@ public:
     
     int blurRadius = 0;
     
-    std::map<std::string, void*> fonts;
-    void* font;
+    std::map<std::string, Font*> fonts;
+    Font* font;
     float fontSize;
+    
+    void loadFont(std::string jsonPath, std::string imagePath, std::string fontName);
+    virtual void loadFontFromMemory(std::string& json,
+                                    std::string fontName,
+                                    void* imageData,
+                                    int width,
+                                    int height,
+                                    int numChannels);
     
     void orthographic(float width, float height);
     

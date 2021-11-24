@@ -11,6 +11,7 @@ set (BLAZEVG_SOURCES
 
 set (GLM_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../glm/" )
 set (DILIGENT_CORE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../DiligentCore/")
+set (JSONCPP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../jsoncpp/")
 
 if (NOT TARGET glm)
     add_subdirectory (${GLM_PATH} "${CMAKE_CURRENT_BINARY_DIR}/glm")
@@ -20,12 +21,17 @@ if (NOT TARGET DiligentCore-ValidateFormatting)
         add_subdirectory (${DILIGENT_CORE_PATH} "${CMAKE_CURRENT_BINARY_DIR}/DiligentCore")
 endif()
 
+if (NOT TARGET jsoncpp)
+    add_subdirectory(${JSONCPP_PATH} "${CMAKE_CURRENT_BINARY_DIR}/jsoncpp")
+endif()
+
 add_library (blazevg
              ${BLAZEVG_SOURCES})
 
 target_include_directories (blazevg PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/include/"
+        "${JSONCPP_PATH}/include"
         ${DILIGENT_CORE_PATH}
         ${GLM_PATH})
 
-target_link_libraries (blazevg glm)
+target_link_libraries (blazevg glm Diligent-Common jsoncpp_static)

@@ -2,6 +2,10 @@
 #include <glm/gtx/transform.hpp>
 #include <glm/gtx/matrix_transform_2d.hpp>
 #include <glm/gtx/vector_angle.hpp>
+#include <json/reader.h>
+#include <json/value.h>
+#include <memory>
+#include <iostream>
 
 namespace bvg {
 
@@ -338,6 +342,21 @@ ShapeMesh miterJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const 
     return mesh;
 }
 
+glm::vec2 getPointAtT(std::vector<glm::vec2>& points, float t) {
+    if (points.size() == 0)
+        return glm::vec2(0.0f);
+    if (t <= 0)
+        return points.front();
+    if (t >= 1)
+        return points.back();
+    
+    float remapedT = t * (float)(points.size() - 1);
+    int segmentIdx = (int)floorf(remapedT);
+    float segmentT = remapedT - (float)segmentIdx;
+    
+    return glm::mix(points.at(segmentIdx), points.at(segmentIdx + 1), segmentT);
+}
+
 TwoPolylines dividePolyline(std::vector<glm::vec2>& points, float t) {
     TwoPolylines twoLines;
     if (t <= 0) {
@@ -352,17 +371,19 @@ TwoPolylines dividePolyline(std::vector<glm::vec2>& points, float t) {
     int segmentIdx = (int)floorf(remapedT);
     float segmentT = remapedT - (float)segmentIdx;
     
+    glm::vec2 pointAtT = glm::mix(points.at(segmentIdx), points.at(segmentIdx + 1), segmentT);
+    
     twoLines.first.resize(segmentIdx + 2);
     for (int i = 0; i < segmentIdx + 1; i++) {
         twoLines.first.at(i) = points.at(i);
     }
-    twoLines.first.at(segmentIdx + 1) = glm::mix(points.at(segmentIdx), points.at(segmentIdx + 1), segmentT);
+    twoLines.first.at(segmentIdx + 1) = pointAtT;
     
     twoLines.second.resize(points.size() - segmentIdx);
     for (int i = 1; i < twoLines.second.size(); i++){
         twoLines.second.at(i) = points.at(segmentIdx + i);
     }
-    twoLines.second.at(0) = glm::mix(points.at(segmentIdx), points.at(segmentIdx + 1), segmentT);
+    twoLines.second.at(0) = pointAtT;
     
     return twoLines;
 }
@@ -863,6 +884,72 @@ glm::mat4 math::toMatrix3D(glm::mat3 mat2d) {
     mat3d[2][2] = 1;
     mat3d[3][3] = 1;
     return glm::transpose(mat3d);
+}
+
+void Context::loadFontFromMemory(std::string& json,
+                                std::string fontName,
+                                void* imageData,
+                                int width,
+                                int height,
+                                int numChannels)
+{
+}
+
+void Font::parseJson(std::string& json) {
+    int jsonLength = (int)json.length();
+    JSONCPP_STRING error;
+    Json::Value root;
+    
+    Json::CharReaderBuilder builder;
+    const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
+    if (!reader->parse(json.c_str(), json.c_str() + jsonLength, &root, &error)) {
+      std::cout << "error: " << error << std::endl;
+      return;
+    }
+    
+    Json::Value atlas = root["atlas"];
+    this->distanceRange = atlas["distanceRange"].asInt();
+    this->size = atlas["size"].asInt();
+    this->atlas.width = atlas["width"].asInt();
+    this->atlas.height = atlas["height"].asInt();
+    
+    Json::Value metrics = root["metrics"];
+    this->lineHeight = (int)((float)this->size * metrics["lineHeight"].asFloat());
+    float bl = (float)this->lineHeight - (float)this->size * fabsf(metrics["descender"].asFloat());
+    this->baseline = (int)bl;
+    
+    Json::Value glyphs = root["glyphs"];
+    for(auto it = glyphs.begin(); it != glyphs.end(); it++) {
+        Json::Value & g = *it;
+        Character c;
+        c.unicode = g["unicode"].asInt();
+        c.advance = (int)((float)this->size * g["advance"].asFloat());
+        
+        Json::Value planeBounds = g["planeBounds"];
+        c.planeBounds.left = planeBounds["left"].asFloat();
+        c.planeBounds.right = planeBounds["right"].asFloat();
+        // Y origin is bottom in json, so we need to invert it
+        c.planeBounds.top = 1.0f - planeBounds["top"].asFloat();
+        c.planeBounds.bottom = 1.0f - planeBounds["bottom"].asFloat();
+        
+        Json::Value atlasBounds = g["atlasBounds"];
+        c.atlasBounds.left = atlasBounds["left"].asFloat();
+        c.atlasBounds.right = atlasBounds["right"].asFloat();
+        // The same with the atlas bounds. We need to invert Y
+        c.atlasBounds.top = (float)this->atlas.height - atlasBounds["top"].asFloat();
+        c.atlasBounds.bottom = (float)this->atlas.height - atlasBounds["bottom"].asFloat();
+        
+        // Normalize to range (0, 1)
+        c.atlasBounds.left /= (float)this->atlas.width;
+        c.atlasBounds.right /= (float)this->atlas.width;
+        c.atlasBounds.top /= (float)this->atlas.height;
+        c.atlasBounds.bottom /= (float)this->atlas.height;
+        this->loadCharacter(c);
+    }
+}
+
+void Font::loadCharacter(Character& character) {
+    
 }
 
 } // namespace bvg
