@@ -516,6 +516,15 @@ Color::Color(float r, float g, float b, float a):
 {
 }
 
+Color Color::lerp(Color a, Color b, float t) {
+    Color c;
+    c.r = glm::mix(a.r, b.r, t);
+    c.g = glm::mix(a.g, b.g, t);
+    c.b = glm::mix(a.b, b.b, t);
+    c.a = glm::mix(a.a, b.a, t);
+    return c;
+}
+
 LineDash::LineDash()
     : length(10.0f), gapLength(0.0f), offset(0.0f)
 {

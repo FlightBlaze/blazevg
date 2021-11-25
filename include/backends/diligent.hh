@@ -47,14 +47,21 @@ void main(in  PSInput  PSIn,
 
 } // namespace solidcol
 
-namespace lingrad {
-
-struct PSConstants {
+struct GradientConstants {
+    GradientConstants(Style& style, glm::mat4& MVP, Context& context);
+    GradientConstants();
+    
     Color startColor;
     Color endColor;
     glm::vec2 startPos;
     glm::vec2 endPos;
     glm::vec2 resolution;
+};
+
+namespace lingrad {
+
+struct PSConstants {
+    GradientConstants gradient;
 };
 
 static const char* PSSource = R"(
@@ -76,42 +83,46 @@ struct PSOutput
     float4 Color : SV_TARGET;
 };
 
-void main(in  PSInput  PSIn,
-          out PSOutput PSOut)
-{
-    float2 gradient_start_pos = g_StartPos;
-    float2 gradient_end_pos = g_EndPos;
+float4 linearGradient(PSInput PSIn) {
+    float2 gradientStartPos = g_StartPos;
+    float2 gradientEndPos = g_EndPos;
     
-
-    float4 color_start = g_StartColor;
-    float4 color_end = g_EndColor;
+    float4 colorStart = g_StartColor;
+    float4 colorEnd = g_EndColor;
     
-    // this is the angle of the gradient in radians
+    // This is the angle of the gradient in radians
     float alpha = atan2(
-        gradient_end_pos.y - gradient_start_pos.y,
-        gradient_end_pos.x - gradient_start_pos.x
+        gradientEndPos.y - gradientStartPos.y,
+        gradientEndPos.x - gradientStartPos.x
     );
     
-    float gradient_startpos_rotated_x = gradient_start_pos.x * cos(-alpha) - gradient_start_pos.y * sin(-alpha);
-    float gradient_endpos_rotated_x = gradient_end_pos.x * cos(-alpha) - gradient_end_pos.y * sin(-alpha);
-    float gradient_length = gradient_endpos_rotated_x - gradient_startpos_rotated_x;
+    float gradientStartPosRotatedX = gradientStartPos.x * cos(-alpha) -
+        gradientStartPos.y * sin(-alpha);
+    float gradientEndPosRotatedX = gradientEndPos.x * cos(-alpha) -
+        gradientEndPos.y * sin(-alpha);
+    float gradientLength = gradientEndPosRotatedX - gradientStartPosRotatedX;
     
     float2 UV = PSIn.Pos / g_Resolution;
 
-    float x_loc_rotated = UV.x * cos(-alpha) - UV.y * sin(-alpha);
+    float LocRotatedX = UV.x * cos(-alpha) - UV.y * sin(-alpha);
     
     float t = smoothstep(
-        gradient_startpos_rotated_x,
-        gradient_startpos_rotated_x + gradient_length,
-        x_loc_rotated
+        gradientStartPosRotatedX,
+        gradientStartPosRotatedX + gradientLength,
+        LocRotatedX
     );
 
-    float4 pixelColor = lerp(
-        color_start,
-        color_end,
+    return lerp(
+        colorStart,
+        colorEnd,
         t
     );
-    PSOut.Color = pixelColor;
+}
+
+void main(in  PSInput  PSIn,
+          out PSOutput PSOut)
+{
+    PSOut.Color = linearGradient(PSIn);
 }
 )";
 
@@ -148,6 +159,9 @@ void main(in  VSInput VSIn,
 struct PSConstants {
     Color color;
     float distanceRange;
+    bool isLinearGradient;
+    bool _padding[8];
+    GradientConstants gradient;
 };
 
 static const char* PSSource = R"(
@@ -155,6 +169,12 @@ cbuffer Constants
 {
     float4 g_Color;
     float g_DistanceRange;
+    bool g_IsLinearGradient;
+    float4 g_StartColor;
+    float4 g_EndColor;
+    float2 g_StartPos;
+    float2 g_EndPos;
+    float2 g_Resolution;
 };
 
 Texture2D    g_Texture;
@@ -169,6 +189,42 @@ struct PSOutput
 {
     float4 Color : SV_TARGET;
 };
+
+float4 linearGradient(PSInput PSIn) {
+    float2 gradientStartPos = g_StartPos;
+    float2 gradientEndPos = g_EndPos;
+    
+    float4 colorStart = g_StartColor;
+    float4 colorEnd = g_EndColor;
+    
+    // This is the angle of the gradient in radians
+    float alpha = atan2(
+        gradientEndPos.y - gradientStartPos.y,
+        gradientEndPos.x - gradientStartPos.x
+    );
+    
+    float gradientStartPosRotatedX = gradientStartPos.x * cos(-alpha) -
+        gradientStartPos.y * sin(-alpha);
+    float gradientEndPosRotatedX = gradientEndPos.x * cos(-alpha) -
+        gradientEndPos.y * sin(-alpha);
+    float gradientLength = gradientEndPosRotatedX - gradientStartPosRotatedX;
+    
+    float2 UV = PSIn.Pos / g_Resolution;
+
+    float LocRotatedX = UV.x * cos(-alpha) - UV.y * sin(-alpha);
+    
+    float t = smoothstep(
+        gradientStartPosRotatedX,
+        gradientStartPosRotatedX + gradientLength,
+        LocRotatedX
+    );
+
+    return lerp(
+        colorStart,
+        colorEnd,
+        t
+    );
+}
 
 float median(float r, float g, float b) {
     return max(min(r, g), min(max(r, g), b));
@@ -187,7 +243,12 @@ void main(in  PSInput  PSIn,
     float Opacity = clamp(SDF * g_DistanceRange, 0.0, 1.0);
     if(Opacity < 0.5)
         discard;
-    PSOut.Color = g_Color;
+    if(g_IsLinearGradient) {
+        PSOut.Color = linearGradient(PSIn);
+    }
+    else {
+        PSOut.Color = g_Color;
+    }
     PSOut.Color.a *= Opacity;
 }
 )";

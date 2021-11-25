@@ -35,6 +35,32 @@ void DiligentContext::initPipelineState() {
     mGlyphShaders = render::GlyphMSDFShaders(mRenderDevice);
 }
 
+namespace shader {
+
+GradientConstants::GradientConstants(Style& style, glm::mat4& MVP, Context& context) {
+    this->startColor = style.gradientStartColor;
+    this->endColor = style.gradientEndColor;
+    this->startPos = glm::vec2(MVP * glm::vec4(style.gradientStartX,
+                                                   style.gradientStartY,
+                                                   0.0f, 1.0f));
+    this->endPos = glm::vec2(MVP * glm::vec4(style.gradientEndX,
+                                                 style.gradientEndY,
+                                                 0.0f, 1.0f));
+    // Convert range (-1.0, 1.0) to (0.0, 1.0)
+    // and invert Y coordinate
+    this->startPos = (this->startPos + 1.0f) / 2.0f;
+    this->endPos = (this->endPos + 1.0f) / 2.0f;
+    this->startPos.y = 1.0f - this->startPos.y;
+    this->endPos.y = 1.0f - this->endPos.y;
+    this->resolution = glm::vec2(context.width, context.height) * context.contentScale;
+}
+
+shader::GradientConstants::GradientConstants()
+{
+}
+
+} // namespace shader
+
 namespace render {
 
 Diligent::InputLayoutDesc createInputLayoutDesc() {
@@ -340,21 +366,7 @@ void Shape::draw(DiligentContext& context, Style& style) {
                                                                      Diligent::MAP_WRITE,
                                                                      Diligent::MAP_FLAG_DISCARD);
                 shader::lingrad::PSConstants c;
-                c.startColor = style.gradientStartColor;
-                c.endColor = style.gradientEndColor;
-                c.startPos = glm::vec2(MVP * glm::vec4(style.gradientStartX,
-                                                               style.gradientStartY,
-                                                               0.0f, 1.0f));
-                c.endPos = glm::vec2(MVP * glm::vec4(style.gradientEndX,
-                                                             style.gradientEndY,
-                                                             0.0f, 1.0f));
-                // Convert range (-1.0, 1.0) to (0.0, 1.0)
-                // and invert Y coordinate
-                c.startPos = (c.startPos + 1.0f) / 2.0f;
-                c.endPos = (c.endPos + 1.0f) / 2.0f;
-                c.startPos.y = 1.0f - c.startPos.y;
-                c.endPos.y = 1.0f - c.endPos.y;
-                c.resolution = glm::vec2(context.width, context.height) * context.contentScale;
+                c.gradient = shader::GradientConstants(style, MVP, context);
                 *CBConstants = c;
             }
             deviceCtx->SetPipelineState(context.mLinearGradientPSO.PSO);
@@ -529,6 +541,11 @@ void DiligentContext::textFill(std::wstring str, float x, float y) {
             shader::msdf::PSConstants c;
             c.color = this->fillStyle.color;
             c.distanceRange = (float)fnt->distanceRange;
+            c.isLinearGradient = false;
+            if(this->fillStyle.type == Style::Type::LinearGradient) {
+                c.isLinearGradient = true;
+                c.gradient = shader::GradientConstants(this->fillStyle, MVP, *this);
+            }
             *CBConstants = c;
         }
 
@@ -649,6 +666,11 @@ void DiligentContext::textFillOnPath(std::wstring str, float x, float y) {
             shader::msdf::PSConstants c;
             c.color = this->fillStyle.color;
             c.distanceRange = (float)fnt->distanceRange;
+            c.isLinearGradient = false;
+            if(this->fillStyle.type == Style::Type::LinearGradient) {
+                c.isLinearGradient = true;
+                c.gradient = shader::GradientConstants(this->fillStyle, MVP, *this);
+            }
             *CBConstants = c;
         }
 

@@ -23,6 +23,8 @@ struct Color {
     Color();
     Color(float r, float g, float b, float a = 1.0f);
     float r, g, b, a;
+    
+    static Color lerp(Color a, Color b, float t);
 };
 
 namespace colors {
