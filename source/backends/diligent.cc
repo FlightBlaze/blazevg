@@ -556,6 +556,126 @@ void DiligentContext::textFill(std::wstring str, float x, float y) {
     }
 }
 
+float tAtLengthClosed(float length, std::vector<float> lengths, float fullLength, bool closed) {
+    if(closed) {
+        float cyclesLength = 0;
+        int cycles = (int)floorf(length / fullLength);
+        cyclesLength = cycles * fullLength;
+        length -= cyclesLength;
+        if(length < 0.0f)
+            length = fullLength - length;
+    }
+    return factory::tAtLength(length, lengths);
+}
+
+void DiligentContext::textFillOnPath(std::wstring str, float x, float y) {
+    assert(this->font != nullptr);
+    
+    std::vector<glm::vec2> polyline = this->toOnePolyline(mPolylines);
+    
+    float scale = fontSize / (float)font->size;
+    float length = x;
+    glm::mat4 transform = this->viewProj * math::toMatrix3D(this->matrix);
+    
+    std::vector<float> polylineLengths = factory::measurePolyline(polyline);
+    float polylineLength = 0;
+    for(float len : polylineLengths)
+        polylineLength += len;
+    
+    bool closed = mIsPolylineClosed;
+    
+    DiligentFont* fnt = static_cast<DiligentFont*>(this->font);
+    for (int i = 0; i < str.size(); i++)
+    {
+        int symbol = str[i];
+        if (symbol == '\n')
+        {
+            continue;
+        }
+        
+        render::CharacterQuad& character = fnt->chars[symbol];
+
+        if (symbol == ' ')
+        {
+            length += (float)character.advance * scale;
+            continue;
+        }
+        
+        float t = tAtLengthClosed(length, polylineLengths, polylineLength, closed);
+        glm::vec2 pos = factory::getPointAtT(polyline, t);
+        
+        float t2 = tAtLengthClosed(length + (float)character.advance, polylineLengths,
+                                   polylineLength, closed);
+        glm::vec2 pos2 = factory::getPointAtT(polyline, t2);
+        
+        if(!closed) {
+            if(length < 0) {
+                glm::vec2 origin = polyline.at(0);
+                glm::vec2 dir = glm::normalize(polyline.at(1) - polyline.at(0));
+                pos = origin + dir * length;
+            }
+            if(length >= polylineLength) {
+                glm::vec2 origin = polyline.back();
+                glm::vec2 dir = glm::normalize(polyline.back() - polyline.at(polyline.size() - 2));
+                float lengthFromOrigin = length - polylineLength;
+                pos = origin + dir * lengthFromOrigin;
+                pos2 = origin + dir * (lengthFromOrigin + (float)character.advance);
+            }
+        }
+        
+        glm::vec2 relativePos = pos2 - pos;
+        float angle = atan2f(relativePos.y, relativePos.x);
+        
+        float upper = -(float)fnt->baseline * scale + y;
+        
+        glm::mat4 MVP = transform * glm::scale(glm::mat4(1.0f), glm::vec3(scale)) *
+            glm::translate(glm::mat4(1.0f), glm::vec3(pos, 0.0f)) *
+            glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0, 0, 1)) *
+            glm::translate(glm::mat4(1.0f), glm::vec3(glm::vec2(0.0f, upper), 0.0f));
+        {
+            Diligent::MapHelper<shader::VSConstants> CBConstants(mDeviceContext,
+                                                                 mGlyphShaders.VSConstants,
+                                                                 Diligent::MAP_WRITE,
+                                                                 Diligent::MAP_FLAG_DISCARD);
+            shader::VSConstants c;
+            c.MVP = glm::transpose(MVP);
+            *CBConstants = c;
+        }
+        {
+            Diligent::MapHelper<shader::msdf::PSConstants> CBConstants(mDeviceContext,
+                                                                       mGlyphShaders.PSConstants,
+                                                                       Diligent::MAP_WRITE,
+                                                                       Diligent::MAP_FLAG_DISCARD);
+            shader::msdf::PSConstants c;
+            c.color = this->fillStyle.color;
+            c.distanceRange = (float)fnt->distanceRange;
+            *CBConstants = c;
+        }
+
+        Diligent::Uint64   offset = 0;
+        Diligent::IBuffer* pBuffs[] = { character.vertexBuffer };
+        mDeviceContext->SetVertexBuffers(0, 1, pBuffs, &offset,
+            Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+            Diligent::SET_VERTEX_BUFFERS_FLAG_RESET);
+        mDeviceContext->SetIndexBuffer(mGlyphShaders.quadIndexBuffer, 0,
+            Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+        mDeviceContext->SetPipelineState(fnt->PSO);
+
+        mDeviceContext->CommitShaderResources(fnt->SRB,
+                                       Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+        Diligent::DrawIndexedAttribs DrawAttrs;
+        DrawAttrs.IndexType = Diligent::VT_UINT32;
+        DrawAttrs.NumIndices = _countof(render::GlyphQuadIndices);
+        DrawAttrs.Flags = Diligent::DRAW_FLAG_VERIFY_ALL;
+
+        mDeviceContext->DrawIndexed(DrawAttrs);
+
+        length += (float)character.advance * scale;
+    }
+}
+
 void DiligentContext::loadFontFromMemory(std::string& json,
                         std::string fontName,
                         void* imageData,

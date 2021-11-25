@@ -638,7 +638,7 @@ std::vector<glm::vec2> Context::toOnePolyline(std::vector<std::vector<glm::vec2>
         if(isApproxEqualVec2(onePolyline.back(), ongoing.front()))
             ongoing.erase(ongoing.begin());
         
-        onePolyline.insert(onePolyline.begin(), ongoing.begin(), ongoing.end());
+        onePolyline.insert(onePolyline.end(), ongoing.begin(), ongoing.end());
     }
     return onePolyline;
 }
@@ -830,7 +830,7 @@ void Context::textFill(std::wstring str, float x, float y) {
     
 }
 
-void Context::textFillOnPath(std::wstring str, float offset) {
+void Context::textFillOnPath(std::wstring str, float x, float y) {
     
 }
 

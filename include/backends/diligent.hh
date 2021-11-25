@@ -373,6 +373,7 @@ public:
     void stroke();
     
     void textFill(std::wstring str, float x, float y);
+    void textFillOnPath(std::wstring str, float x = 0, float y = 0);
     
     void loadFontFromMemory(std::string& json,
                             std::string fontName,

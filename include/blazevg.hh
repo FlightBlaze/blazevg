@@ -100,6 +100,10 @@ std::vector<std::vector<glm::vec2>> dashedPolyline(std::vector<glm::vec2>& point
 ShapeMesh roundedCap(glm::vec2 position, glm::vec2 direction, const float diameter);
 ShapeMesh squareCap(glm::vec2 position, glm::vec2 direction, const float diameter);
 
+std::vector<float> measurePolyline(std::vector<glm::vec2>& points);
+float lengthOfPolyline(std::vector<glm::vec2>& points);
+float tAtLength(float length, std::vector<float>& lengths);
+
 std::vector<TriangeIndices> createIndicesConvex(int numVertices);
 
 } // namespace factory
@@ -188,7 +192,7 @@ public:
     virtual void stroke();
     
     virtual void textFill(std::wstring str, float x, float y);
-    virtual void textFillOnPath(std::wstring str, float offset = 0);
+    virtual void textFillOnPath(std::wstring str, float x = 0, float y = 0);
     float measureTextWidth(std::wstring str);
     float measureTextHeight();
     
