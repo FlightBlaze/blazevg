@@ -146,7 +146,7 @@ void main(in  VSInput VSIn,
 )";
 
 struct PSConstants {
-    glm::vec4 color;
+    Color color;
     float distanceRange;
 };
 
@@ -371,6 +371,8 @@ public:
     
     void convexFill();
     void stroke();
+    
+    void textFill(std::wstring str, float x, float y);
     
     void loadFontFromMemory(std::string& json,
                             std::string fontName,

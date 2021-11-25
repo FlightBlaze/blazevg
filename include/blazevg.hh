@@ -157,8 +157,8 @@ public:
     int blurRadius = 0;
     
     std::map<std::string, Font*> fonts;
-    Font* font;
-    float fontSize;
+    Font* font = nullptr;
+    float fontSize = 32.0f;
     
     void loadFont(std::string jsonPath, std::string imagePath, std::string fontName);
     virtual void loadFontFromMemory(std::string& json,
@@ -188,7 +188,7 @@ public:
     virtual void stroke();
     
     virtual void textFill(std::wstring str, float x, float y);
-    virtual void textFillOnPath(std::wstring str);
+    virtual void textFillOnPath(std::wstring str, float offset = 0);
     float measureTextWidth(std::wstring str);
     float measureTextHeight();
     
@@ -203,6 +203,8 @@ public:
     void rect(float x, float y, float width, float height,
               float topLeftRadius, float topRightRadius,
               float bottomRightRadius, float bottomLeftRadius);
+    
+    virtual ~Context();
     
 protected:
     std::vector<std::vector<glm::vec2>> mPolylines;

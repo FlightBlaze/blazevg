@@ -830,7 +830,7 @@ void Context::textFill(std::wstring str, float x, float y) {
     
 }
 
-void Context::textFillOnPath(std::wstring str) {
+void Context::textFillOnPath(std::wstring str, float offset) {
     
 }
 
@@ -950,6 +950,12 @@ void Font::parseJson(std::string& json) {
 
 void Font::loadCharacter(Character& character) {
     
+}
+
+Context::~Context()
+{
+    for(auto it = this->fonts.begin(); it != this->fonts.end(); it++)
+        delete it->second;
 }
 
 } // namespace bvg

@@ -1,6 +1,7 @@
 #include <backends/diligent.hh>
 #include <Graphics/GraphicsTools/interface/CommonlyUsedStates.h>
 #include <Graphics/GraphicsTools/interface/MapHelper.hpp>
+#include <glm/gtx/transform.hpp>
 
 namespace bvg {
 
@@ -482,6 +483,79 @@ void DiligentContext::stroke() {
     shape.draw(*this, this->strokeStyle);
 }
 
+void DiligentContext::textFill(std::wstring str, float x, float y) {
+    assert(this->font != nullptr);
+    
+    float scale = fontSize / (float)font->size;
+    glm::vec2 pos = glm::vec2(x, y);
+    glm::mat4 transform = this->viewProj * math::toMatrix3D(this->matrix);
+    
+    DiligentFont* fnt = static_cast<DiligentFont*>(this->font);
+    for (int i = 0; i < str.size(); i++)
+    {
+        int symbol = str[i];
+        if (symbol == '\n')
+        {
+            pos.y += font->lineHeight * scale;
+            pos.x = x;
+            continue;
+        }
+        
+        render::CharacterQuad& character = fnt->chars[symbol];
+
+        if (symbol == ' ')
+        {
+            pos.x += (float)character.advance * scale;
+            continue;
+        }
+        
+        glm::mat4 MVP = transform * glm::scale(
+            glm::translate(glm::identity<glm::mat4>(), glm::vec3(pos, 0.0f)),
+            glm::vec3(scale));
+        {
+            Diligent::MapHelper<shader::VSConstants> CBConstants(mDeviceContext,
+                                                                 mGlyphShaders.VSConstants,
+                                                                 Diligent::MAP_WRITE,
+                                                                 Diligent::MAP_FLAG_DISCARD);
+            shader::VSConstants c;
+            c.MVP = glm::transpose(MVP);
+            *CBConstants = c;
+        }
+        {
+            Diligent::MapHelper<shader::msdf::PSConstants> CBConstants(mDeviceContext,
+                                                                       mGlyphShaders.PSConstants,
+                                                                       Diligent::MAP_WRITE,
+                                                                       Diligent::MAP_FLAG_DISCARD);
+            shader::msdf::PSConstants c;
+            c.color = this->fillStyle.color;
+            c.distanceRange = (float)fnt->distanceRange;
+            *CBConstants = c;
+        }
+
+        Diligent::Uint64   offset = 0;
+        Diligent::IBuffer* pBuffs[] = { character.vertexBuffer };
+        mDeviceContext->SetVertexBuffers(0, 1, pBuffs, &offset,
+            Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+            Diligent::SET_VERTEX_BUFFERS_FLAG_RESET);
+        mDeviceContext->SetIndexBuffer(mGlyphShaders.quadIndexBuffer, 0,
+            Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+        mDeviceContext->SetPipelineState(fnt->PSO);
+
+        mDeviceContext->CommitShaderResources(fnt->SRB,
+                                       Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+        Diligent::DrawIndexedAttribs DrawAttrs;
+        DrawAttrs.IndexType = Diligent::VT_UINT32;
+        DrawAttrs.NumIndices = _countof(render::GlyphQuadIndices);
+        DrawAttrs.Flags = Diligent::DRAW_FLAG_VERIFY_ALL;
+
+        mDeviceContext->DrawIndexed(DrawAttrs);
+
+        pos.x += (float)character.advance * scale;
+    }
+}
+
 void DiligentContext::loadFontFromMemory(std::string& json,
                         std::string fontName,
                         void* imageData,
@@ -518,6 +592,22 @@ DiligentFont::DiligentFont(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> rend
     this->parseJson(json);
 }
 
+void* convertRGBToRGBA(char* imageData,
+                       int width,
+                       int height)
+{
+    char* newImage = new char[width * height * 4];
+    for(size_t i = 0; i < width * height; i++) {
+        size_t oldIndex = i * 3LL;
+        size_t newIndex = i * 4LL;
+        newImage[newIndex] = imageData[oldIndex]; // Red
+        newImage[newIndex + 1LL] = imageData[oldIndex + 1LL]; // Green
+        newImage[newIndex + 2LL] = imageData[oldIndex + 2LL]; // Blue
+        newImage[newIndex + 3LL] = 255; // Alpha
+    }
+    return newImage;
+}
+
 void DiligentFont::createTexture(Diligent::TEXTURE_FORMAT colorBufferFormat,
                                  void* imageData,
                                  int width,
@@ -526,8 +616,11 @@ void DiligentFont::createTexture(Diligent::TEXTURE_FORMAT colorBufferFormat,
 {
     assert(imageData != nullptr);
     
-    int ChannelDepth = 8;
-    int RGBAStride = width * numChannels * ChannelDepth;// / 8;
+    int RGBAStride = width * numChannels;
+    if(numChannels == 3) {
+        RGBAStride = width * 4;
+        imageData = convertRGBToRGBA((char*)imageData, width, height);
+    }
     // RGBAStride = (RGBAStride + 3) & (-4);
 
     Diligent::TextureSubResData SubRes;
@@ -547,6 +640,10 @@ void DiligentFont::createTexture(Diligent::TEXTURE_FORMAT colorBufferFormat,
     TexDesc.BindFlags = Diligent::BIND_SHADER_RESOURCE;
     mRenderDevice->CreateTexture(TexDesc, &TexData, &mTexture);
     textureSRV = mTexture->GetDefaultView(Diligent::TEXTURE_VIEW_SHADER_RESOURCE);
+    
+    if(numChannels == 3) {
+        delete[] (char*)imageData;
+    }
 }
 
 void DiligentFont::recreatePipelineState(Diligent::TEXTURE_FORMAT colorBufferFormat,
