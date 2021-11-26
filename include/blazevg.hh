@@ -111,7 +111,7 @@ std::vector<TriangeIndices> createIndicesConvex(int numVertices);
 } // namespace factory
 
 namespace math {
-    
+
 glm::mat4 toMatrix3D(glm::mat3 mat2d);
 
 } // namespace math

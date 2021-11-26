@@ -851,6 +851,12 @@ void Context::textFillOnPath(std::wstring str, float x, float y) {
     
 }
 
+void Context::arc(float x, float y, float radius, float startAngle, float endAngle) {
+    // Invert the angles to make the rotation clockwise
+    mPolylines.push_back(factory::createArc(-startAngle, -endAngle, radius, 32, glm::vec2(x, y)));
+    mCurrentPos = mPolylines.front().back();
+}
+
 void Context::translate(float x, float y) {
     this->matrix = glm::translate(glm::mat3(1.0f), glm::vec2(x, y)) * this->matrix;
 }
