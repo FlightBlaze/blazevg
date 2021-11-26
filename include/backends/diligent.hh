@@ -431,6 +431,7 @@ public:
     DiligentContext();
     
     void convexFill();
+    void fill();
     void stroke();
     
     void textFill(std::wstring str, float x, float y);

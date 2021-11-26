@@ -6,6 +6,7 @@
 #include <json/value.h>
 #include <memory>
 #include <iostream>
+#include <list>
 
 namespace bvg {
 
@@ -659,6 +660,13 @@ factory::ShapeMesh Context::internalConvexFill() {
     return mesh;
 }
 
+factory::ShapeMesh Context::internalFill() {
+    factory::ShapeMesh mesh;
+    mesh.vertices = this->toOnePolyline(mPolylines);
+    mesh.indices = earcut::triangulate(mesh.vertices);
+    return mesh;
+}
+
 factory::ShapeMesh Context::internalStroke() {
     factory::ShapeMesh mesh;
     auto* allPolylines = &this->mPolylines;
@@ -966,5 +974,67 @@ Context::~Context()
     for(auto it = this->fonts.begin(); it != this->fonts.end(); it++)
         delete it->second;
 }
+
+namespace earcut {
+
+std::vector<factory::TriangeIndices> triangulate(std::vector<glm::vec2>& vertices) {
+    std::vector<factory::TriangeIndices> tris;
+
+    if(vertices.size() < 3)
+        return tris;
+    
+    tris.reserve(vertices.size() - 2);
+    
+    std::list<int> left;
+    for(int i = 0; i < vertices.size(); i++)
+        left.push_back(i);
+    
+    while(left.size() != 2) {
+        float biggestAngle = -M_PI_2;
+        auto sharpestVertex = left.begin();
+        auto it = left.begin();
+        auto beforeEnd = left.end();
+        beforeEnd--;
+        while(true) {
+            // We start from the second vertex
+            // and go to before the last
+            it++;
+            if(it == beforeEnd)
+                break;
+            
+            auto next = it;
+            auto prev = it;
+            next++;
+            prev--;
+            
+            glm::vec2 a = vertices.at(*prev);
+            glm::vec2 b = vertices.at(*it);
+            glm::vec2 c = vertices.at(*next);
+            
+            float angle = glm::orientedAngle(glm::normalize(c - b),
+                                             glm::normalize(a - b));
+            if(angle > biggestAngle) {
+                biggestAngle = angle;
+                sharpestVertex = it;
+            }
+            
+        }
+        factory::TriangeIndices tri;
+        auto next = sharpestVertex;
+        auto prev = sharpestVertex;
+        auto curr = sharpestVertex;
+        next++;
+        prev--;
+        tri.a = *prev;
+        tri.b = *curr;
+        tri.c = *next;
+        tris.push_back(tri);
+        
+        left.erase(sharpestVertex);
+    }
+    return tris;
+}
+
+} // namespace earcut
 
 } // namespace bvg

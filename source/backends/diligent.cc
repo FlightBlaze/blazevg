@@ -489,6 +489,12 @@ void DiligentContext::convexFill() {
     shape.draw(*this, this->fillStyle);
 }
 
+void DiligentContext::fill() {
+    factory::ShapeMesh mesh = internalFill();
+    render::Shape shape = render::Shape(mRenderDevice, mesh);
+    shape.draw(*this, this->fillStyle);
+}
+
 void DiligentContext::stroke() {
     factory::ShapeMesh mesh = internalStroke();
     render::Shape shape = render::Shape(mRenderDevice, mesh);

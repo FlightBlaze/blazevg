@@ -224,4 +224,10 @@ protected:
     factory::ShapeMesh internalStroke();
 };
 
+namespace earcut {
+
+std::vector<factory::TriangeIndices> triangulate(std::vector<glm::vec2>& vertices);
+
+} // namespace earcut
+
 } // namespace bvg
