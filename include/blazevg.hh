@@ -35,22 +35,50 @@ static const Color White = Color(1.0f, 1.0f, 1.0f);
 } // namespace colors
 
 struct Style {
+    Style();
+    
     enum class Type {
         SolidColor,
-        LinearGradient
+        LinearGradient,
+        RadialGradient,
+        ConicGradient
     };
+    struct Linear {
+        Color startColor;
+        float startX = 0.0f;
+        float startY = 0.0f;
+        Color endColor;
+        float endX = 0.0f;
+        float endY = 0.0f;
+    };
+    struct Radial {
+        Color startColor;
+        Color endColor;
+        float x;
+        float y;
+        float radius;
+    };
+    struct Conic {
+        Color startColor;
+        Color endColor;
+        float x;
+        float y;
+        float angle;
+    };
+    
     Type type;
-    Color color;
-    Color gradientStartColor;
-    float gradientStartX = 0;
-    float gradientStartY = 0;
-    Color gradientEndColor;
-    float gradientEndX = 0;
-    float gradientEndY = 0;
+    union {
+        Color color;
+        Linear linear;
+        Radial radial;
+        Conic conic;
+    };
 };
 
 Style SolidColor(Color color);
 Style LinearGradient(float sx, float sy, float ex, float ey, Color start, Color end);
+Style RadialGradient(float x, float y, float radius, Color start, Color end);
+Style ConicGradient(float x, float y, float angle, Color start, Color end);
 
 struct LineDash {
     LineDash();

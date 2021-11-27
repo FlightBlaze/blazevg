@@ -536,6 +536,10 @@ LineDash::LineDash(float length, float gapLength, float offset)
 {
 }
 
+Style::Style()
+{
+}
+
 Style SolidColor(Color color) {
     Style style;
     style.type = Style::Type::SolidColor;
@@ -546,12 +550,34 @@ Style SolidColor(Color color) {
 Style LinearGradient(float sx, float sy, float ex, float ey, Color start, Color end) {
     Style style;
     style.type = Style::Type::LinearGradient;
-    style.gradientStartColor = start;
-    style.gradientStartX = sx;
-    style.gradientStartY = sy;
-    style.gradientEndColor = end;
-    style.gradientEndX = ex;
-    style.gradientEndY = ey;
+    style.linear.startColor = start;
+    style.linear.startX = sx;
+    style.linear.startY = sy;
+    style.linear.endColor = end;
+    style.linear.endX = ex;
+    style.linear.endY = ey;
+    return style;
+}
+
+Style RadialGradient(float x, float y, float radius, Color start, Color end) {
+    Style style;
+    style.type = Style::Type::RadialGradient;
+    style.radial.startColor = start;
+    style.radial.endColor = end;
+    style.radial.x = x;
+    style.radial.y = y;
+    style.radial.radius = radius;
+    return style;
+}
+
+Style ConicGradient(float x, float y, float angle, Color start, Color end) {
+    Style style;
+    style.type = Style::Type::ConicGradient;
+    style.conic.startColor = start;
+    style.conic.endColor = end;
+    style.conic.x = x;
+    style.conic.y = y;
+    style.conic.angle = angle;
     return style;
 }
 

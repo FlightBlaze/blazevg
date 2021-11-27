@@ -28,7 +28,7 @@ void DiligentContext::initPipelineState() {
                                                      mColorBufferFormat,
                                                      mDepthBufferFormat);
     
-    mLinearGradientPSO = render::LinearGradientPipelineState(mRenderDevice,
+    mGradientPSO = render::GradientPipelineState(mRenderDevice,
                                                      mColorBufferFormat,
                                                      mDepthBufferFormat);
     
@@ -38,20 +38,49 @@ void DiligentContext::initPipelineState() {
 namespace shader {
 
 GradientConstants::GradientConstants(Style& style, glm::mat4& MVP, Context& context) {
-    this->startColor = style.gradientStartColor;
-    this->endColor = style.gradientEndColor;
-    this->startPos = glm::vec2(MVP * glm::vec4(style.gradientStartX,
-                                                   style.gradientStartY,
-                                                   0.0f, 1.0f));
-    this->endPos = glm::vec2(MVP * glm::vec4(style.gradientEndX,
-                                                 style.gradientEndY,
-                                                 0.0f, 1.0f));
-    // Convert range (-1.0, 1.0) to (0.0, 1.0)
-    // and invert Y coordinate
-    this->startPos = (this->startPos + 1.0f) / 2.0f;
-    this->endPos = (this->endPos + 1.0f) / 2.0f;
-    this->startPos.y = 1.0f - this->startPos.y;
-    this->endPos.y = 1.0f - this->endPos.y;
+    switch(style.type) {
+        case Style::Type::LinearGradient:
+            this->type = Type::Linear;
+            this->startColor = style.linear.startColor;
+            this->endColor = style.linear.endColor;
+            this->startPos = glm::vec2(MVP * glm::vec4(style.linear.startX,
+                                                       style.linear.startY,
+                                                       0.0f, 1.0f));
+            this->endPos = glm::vec2(MVP * glm::vec4(style.linear.endX,
+                                                     style.linear.endY,
+                                                     0.0f, 1.0f));
+            // Convert range (-1.0, 1.0) to (0.0, 1.0)
+            // and invert Y coordinate
+            this->startPos = (this->startPos + 1.0f) / 2.0f;
+            this->endPos = (this->endPos + 1.0f) / 2.0f;
+            this->startPos.y = 1.0f - this->startPos.y;
+            this->endPos.y = 1.0f - this->endPos.y;
+            break;
+        case Style::Type::RadialGradient:
+            this->type = Type::Radial;
+            this->startColor = style.radial.startColor;
+            this->endColor = style.radial.endColor;
+            this->startPos = glm::vec2(MVP * glm::vec4(style.radial.x,
+                                                       style.radial.y,
+                                                       0.0f, 1.0f));
+            this->startPos = (this->startPos + 1.0f) / 2.0f;
+            this->startPos.y = 1.0f - this->startPos.y;
+            this->radiusOrAngle = style.radial.radius;
+            break;
+        case Style::Type::ConicGradient:
+            this->type = Type::Conic;
+            this->startColor = style.conic.startColor;
+            this->endColor = style.conic.endColor;
+            this->startPos = glm::vec2(MVP * glm::vec4(style.conic.x,
+                                                       style.conic.y,
+                                                       0.0f, 1.0f));
+            this->startPos = (this->startPos + 1.0f) / 2.0f;
+            this->startPos.y = 1.0f - this->startPos.y;
+            this->radiusOrAngle = style.conic.angle;
+            break;
+        default:
+            break;
+    }
     this->resolution = glm::vec2(context.width, context.height) * context.contentScale;
 }
 
@@ -176,8 +205,8 @@ SolidColorPipelineState::SolidColorPipelineState()
 {
 }
 
-LinearGradientPipelineState::
-LinearGradientPipelineState(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+GradientPipelineState::
+GradientPipelineState(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
                         Diligent::TEXTURE_FORMAT colorBufferFormat,
                         Diligent::TEXTURE_FORMAT depthBufferFormat) {
     createShaders(renderDevice);
@@ -185,7 +214,7 @@ LinearGradientPipelineState(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> ren
     this->isInitialized = true;
 }
 
-void LinearGradientPipelineState::
+void GradientPipelineState::
 createShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice) {
     Diligent::ShaderCreateInfo ShaderCI;
     ShaderCI.SourceLanguage = Diligent::SHADER_SOURCE_LANGUAGE_HLSL;
@@ -213,12 +242,12 @@ createShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice) {
         ShaderCI.Desc.ShaderType = Diligent::SHADER_TYPE_PIXEL;
         ShaderCI.EntryPoint = "main";
         ShaderCI.Desc.Name = "blazevg linear gradient pixel shader";
-        ShaderCI.Source = shader::lingrad::PSSource;
+        ShaderCI.Source = shader::grad::PSSource;
         renderDevice->CreateShader(ShaderCI, &PS);
 
         Diligent::BufferDesc CBDesc;
         CBDesc.Name = "blazevg linear gradient PS constants CB";
-        CBDesc.Size = sizeof(shader::lingrad::PSConstants);
+        CBDesc.Size = sizeof(shader::grad::PSConstants);
         CBDesc.Usage = Diligent::USAGE_DYNAMIC;
         CBDesc.BindFlags = Diligent::BIND_UNIFORM_BUFFER;
         CBDesc.CPUAccessFlags = Diligent::CPU_ACCESS_WRITE;
@@ -226,7 +255,7 @@ createShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice) {
     }
 }
 
-void LinearGradientPipelineState::
+void GradientPipelineState::
 recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
          Diligent::TEXTURE_FORMAT colorBufferFormat,
          Diligent::TEXTURE_FORMAT depthBufferFormat)
@@ -276,7 +305,7 @@ recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
     PSO->CreateShaderResourceBinding(&SRB, true);
 }
 
-LinearGradientPipelineState::LinearGradientPipelineState()
+GradientPipelineState::GradientPipelineState()
 {
 }
 
@@ -348,10 +377,12 @@ void Shape::draw(DiligentContext& context, Style& style) {
         }
             break;
         case Style::Type::LinearGradient:
+        case Style::Type::RadialGradient:
+        case Style::Type::ConicGradient:
         {
             {
                 Diligent::MapHelper<shader::VSConstants> CBConstants(deviceCtx,
-                                                                     context.mLinearGradientPSO
+                                                                     context.mGradientPSO
                                                                             .VSConstants,
                                                                      Diligent::MAP_WRITE,
                                                                      Diligent::MAP_FLAG_DISCARD);
@@ -360,17 +391,17 @@ void Shape::draw(DiligentContext& context, Style& style) {
                 *CBConstants = c;
             }
             {
-                Diligent::MapHelper<shader::lingrad::PSConstants> CBConstants(deviceCtx,
-                                                                     context.mLinearGradientPSO
+                Diligent::MapHelper<shader::grad::PSConstants> CBConstants(deviceCtx,
+                                                                     context.mGradientPSO
                                                                                .PSConstants,
                                                                      Diligent::MAP_WRITE,
                                                                      Diligent::MAP_FLAG_DISCARD);
-                shader::lingrad::PSConstants c;
+                shader::grad::PSConstants c;
                 c.gradient = shader::GradientConstants(style, MVP, context);
                 *CBConstants = c;
             }
-            deviceCtx->SetPipelineState(context.mLinearGradientPSO.PSO);
-            deviceCtx->CommitShaderResources(context.mLinearGradientPSO.SRB, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            deviceCtx->SetPipelineState(context.mGradientPSO.PSO);
+            deviceCtx->CommitShaderResources(context.mGradientPSO.SRB, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         }
             break;
         default:

@@ -48,6 +48,12 @@ void main(in  PSInput  PSIn,
 } // namespace solidcol
 
 struct GradientConstants {
+    enum class Type {
+        Linear = 0,
+        Radial = 1,
+        Conic = 2
+    };
+    
     GradientConstants(Style& style, glm::mat4& MVP, Context& context);
     GradientConstants();
     
@@ -56,9 +62,11 @@ struct GradientConstants {
     glm::vec2 startPos;
     glm::vec2 endPos;
     glm::vec2 resolution;
+    float radiusOrAngle;
+    Type type;
 };
 
-namespace lingrad {
+namespace grad {
 
 struct PSConstants {
     GradientConstants gradient;
@@ -72,6 +80,8 @@ cbuffer Constants
     float2 g_StartPos;
     float2 g_EndPos;
     float2 g_Resolution;
+    float g_RadiusOrAngle;
+    int g_Type;
 };
 
 struct PSInput
@@ -119,14 +129,53 @@ float4 linearGradient(PSInput PSIn) {
     );
 }
 
+float4 radialGradient(PSInput PSIn) {
+    float dist = length(PSIn.Pos - g_StartPos * g_Resolution);
+    float t = dist / g_RadiusOrAngle;
+    t = clamp(t, 0.0, 1.0);
+    return lerp(
+        g_StartColor,
+        g_EndColor,
+        t
+    );
+}
+
+float2 rotate(float2 v, float angle) {
+    return float2(
+            v.x * cos(angle) - v.y * sin(angle),
+            v.x * sin(angle) + v.y * cos(angle)
+    );
+}
+
+float4 conicGradient(PSInput PSIn) {
+    float pi = 3.14;
+
+    float2 UV = PSIn.Pos / g_Resolution;
+    float2 relative = rotate(UV - g_StartPos, -g_RadiusOrAngle);
+
+    float angle = atan2(relative.x, relative.y);
+    float t = (angle + pi) / 2.0 / pi;
+    
+    return lerp(
+        g_StartColor,
+        g_EndColor,
+        t
+    );
+}
+
 void main(in  PSInput  PSIn,
           out PSOutput PSOut)
 {
-    PSOut.Color = linearGradient(PSIn);
+    if(g_Type == 0)
+        PSOut.Color = linearGradient(PSIn);
+    else if(g_Type == 1)
+        PSOut.Color = radialGradient(PSIn);
+    else if(g_Type == 2)
+        PSOut.Color = conicGradient(PSIn);
 }
 )";
 
-} // namespace lingrad
+} // namespace grad
 
 namespace msdf { // namespace msdf
 
@@ -325,12 +374,12 @@ private:
     void createShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice);
 };
 
-class LinearGradientPipelineState {
+class GradientPipelineState {
 public:
-    LinearGradientPipelineState(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+    GradientPipelineState(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
                             Diligent::TEXTURE_FORMAT colorBufferFormat,
                             Diligent::TEXTURE_FORMAT depthBufferFormat);
-    LinearGradientPipelineState();
+    GradientPipelineState();
     
     bool isInitialized = false;
     
@@ -453,7 +502,7 @@ private:
     Diligent::TEXTURE_FORMAT mColorBufferFormat;
     Diligent::TEXTURE_FORMAT mDepthBufferFormat;
     
-    render::LinearGradientPipelineState mLinearGradientPSO;
+    render::GradientPipelineState mGradientPSO;
     render::SolidColorPipelineState mSolidColorPSO;
     render::GlyphMSDFShaders mGlyphShaders;
     
