@@ -7,6 +7,7 @@
 #include <memory>
 #include <iostream>
 #include <list>
+#include <codecvt>
 
 namespace bvg {
 
@@ -851,6 +852,14 @@ void Context::textFillOnPath(std::wstring str, float x, float y) {
     
 }
 
+float Context::measureTextWidth(std::wstring str) {
+    return 0.0f;
+}
+
+float Context::measureTextHeight() {
+    return 0.0f;
+}
+
 void Context::arc(float x, float y, float radius, float startAngle, float endAngle) {
     // Invert the angles to make the rotation clockwise
     mPolylines.push_back(factory::createArc(-startAngle, -endAngle, radius, 32, glm::vec2(x, y)));
@@ -981,6 +990,33 @@ Context::~Context()
         delete it->second;
 }
 
+std::list<int>::iterator circularNext(std::list<int> &l, std::list<int>::iterator &it)
+{
+    return std::next(it) == l.end() ? l.begin() : std::next(it);
+}
+
+std::list<int>::iterator circularPrev(std::list<int> &l, std::list<int>::iterator &it)
+{
+    return it == l.begin() ? std::prev(l.end()) : std::prev(it);
+}
+
+namespace math {
+
+bool barycentricIsPointInTriangle(glm::vec2 v1, glm::vec2 v2, glm::vec2 v3, glm::vec2 point) {
+    float denominator = ((v2.y - v3.y) * (v1.x - v3.x) + (v3.x - v2.x) * (v1.y - v3.y));
+    float a = ((v2.y - v3.y) * (point.x - v3.x) + (v3.x - v2.x) * (point.y - v3.y)) / denominator;
+    float b = ((v3.y - v1.y) * (point.x - v3.x) + (v1.x - v3.x) * (point.y - v3.y)) / denominator;
+    float c = 1 - a - b;
+
+    return 0 <= a && a <= 1 && 0 <= b && b <= 1 && 0 <= c && c <= 1;
+}
+
+bool isPointInTriange(glm::vec2 a, glm::vec2 b, glm::vec2 c, glm::vec2 point) {
+    return barycentricIsPointInTriangle(a, b, c, point);
+}
+
+} // namespace math
+
 namespace earcut {
 
 std::vector<factory::TriangeIndices> triangulate(std::vector<glm::vec2>& vertices) {
@@ -996,22 +1032,10 @@ std::vector<factory::TriangeIndices> triangulate(std::vector<glm::vec2>& vertice
         left.push_back(i);
     
     while(left.size() != 2) {
-        float biggestAngle = -M_PI_2;
-        auto sharpestVertex = left.begin();
         auto it = left.begin();
-        auto beforeEnd = left.end();
-        beforeEnd--;
         while(true) {
-            // We start from the second vertex
-            // and go to before the last
-            it++;
-            if(it == beforeEnd)
-                break;
-            
-            auto next = it;
-            auto prev = it;
-            next++;
-            prev--;
+            auto next = circularNext(left, it);
+            auto prev = circularPrev(left, it);
             
             glm::vec2 a = vertices.at(*prev);
             glm::vec2 b = vertices.at(*it);
@@ -1019,28 +1043,145 @@ std::vector<factory::TriangeIndices> triangulate(std::vector<glm::vec2>& vertice
             
             float angle = glm::orientedAngle(glm::normalize(c - b),
                                              glm::normalize(a - b));
-            if(angle > biggestAngle) {
-                biggestAngle = angle;
-                sharpestVertex = it;
+            
+            if(angle >= 0) {
+                glm::vec2 triA = vertices.at(*prev);
+                glm::vec2 triB = vertices.at(*it);
+                glm::vec2 triC = vertices.at(*next);
+                bool isEar = true;
+                for(auto j = left.begin(); j != left.end(); j++) {
+                    if(j == it || j == next || j == prev)
+                        continue;
+                    glm::vec2 point = vertices.at(*j);
+                    if(math::isPointInTriange(triA, triB, triC, point)) {
+                        isEar = false;
+                        break;
+                    }
+                }
+                if(isEar)
+                    break;
             }
             
+            if(next == left.begin())
+                break;
+            
+            it++;
         }
+        
         factory::TriangeIndices tri;
-        auto next = sharpestVertex;
-        auto prev = sharpestVertex;
-        auto curr = sharpestVertex;
-        next++;
-        prev--;
+        auto next = circularNext(left, it);
+        auto prev = circularPrev(left, it);
+        auto curr = it;
         tri.a = *prev;
         tri.b = *curr;
         tri.c = *next;
         tris.push_back(tri);
         
-        left.erase(sharpestVertex);
+        left.erase(it);
     }
     return tris;
 }
 
 } // namespace earcut
+
+std::vector<factory::TriangeIndices>
+Context::debugTriangulate(std::vector<glm::vec2>& vertices, bool draw) {
+    Style prevStyle = this->fillStyle;
+    this->fillStyle = SolidColor(colors::Black);
+    this->strokeStyle = SolidColor(colors::Black);
+    this->lineDash = LineDash();
+    this->lineWidth = 1.0f;
+    this->fontSize = 16.0f;
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    
+    std::vector<factory::TriangeIndices> tris;
+
+    if(vertices.size() < 3)
+        return tris;
+    
+    tris.reserve(vertices.size() - 2);
+    
+    std::list<int> left;
+    for(int i = 0; i < vertices.size(); i++)
+        left.push_back(i);
+    
+    while(left.size() != 2) {
+        std::list<int> convex;
+        std::list<int> reflex;
+        std::list<int> earTips;
+        auto it = left.begin();
+        while(true) {
+            auto next = circularNext(left, it);
+            auto prev = circularPrev(left, it);
+            
+            glm::vec2 a = vertices.at(*prev);
+            glm::vec2 b = vertices.at(*it);
+            glm::vec2 c = vertices.at(*next);
+            
+            float angle = glm::orientedAngle(glm::normalize(c - b),
+                                             glm::normalize(a - b));
+            
+            if(angle >= 0) {
+                glm::vec2 triA = vertices.at(*prev);
+                glm::vec2 triB = vertices.at(*it);
+                glm::vec2 triC = vertices.at(*next);
+                bool isEar = true;
+                for(auto j = left.begin(); j != left.end(); j++) {
+                    if(j == it || j == next || j == prev)
+                        continue;
+                    glm::vec2 point = vertices.at(*j);
+                    if(math::isPointInTriange(triA, triB, triC, point)) {
+                        isEar = false;
+                        break;
+                    }
+                }
+                if(isEar)
+                    break;
+            }
+            
+            if(next == left.begin())
+                break;
+            
+            it++;
+        }
+        
+        factory::TriangeIndices tri;
+        auto next = circularNext(left, it);
+        auto prev = circularPrev(left, it);
+        auto curr = it;
+        tri.a = *prev;
+        tri.b = *curr;
+        tri.c = *next;
+        tris.push_back(tri);
+        
+        glm::vec2 a = vertices.at(tri.a);
+        glm::vec2 b = vertices.at(tri.b);
+        glm::vec2 c = vertices.at(tri.c);
+        
+        if(draw) {
+            this->beginPath();
+            moveTo(a.x, a.y);
+            lineTo(b.x, b.y);
+            lineTo(c.x, c.y);
+            closePath();
+            stroke();
+        }
+        
+//        glm::vec2 textPos = vertices.at(*curr);
+//        if(this->font != nullptr &&
+//           glm::distance(a, b) > 10.0f &&
+//           glm::distance(b, c) > 10.0f) {
+//            std::ostringstream ss;
+//            ss << roundf(glm::degrees(biggestAngle));
+//            std::wstring str = converter.from_bytes(ss.str().c_str());
+//            this->textFill(str, textPos.x, textPos.y);
+//        }
+        
+        left.erase(it);
+    }
+    
+    this->fillStyle = prevStyle;
+    return tris;
+}
 
 } // namespace bvg

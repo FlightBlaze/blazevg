@@ -493,6 +493,7 @@ void DiligentContext::fill() {
     factory::ShapeMesh mesh = internalFill();
     render::Shape shape = render::Shape(mRenderDevice, mesh);
     shape.draw(*this, this->fillStyle);
+    // this->debugTriangulate(mesh.vertices, true);
 }
 
 void DiligentContext::stroke() {
@@ -702,6 +703,32 @@ void DiligentContext::textFillOnPath(std::wstring str, float x, float y) {
 
         length += (float)character.advance * scale;
     }
+}
+
+float DiligentContext::measureTextWidth(std::wstring str) {
+    assert(this->font != nullptr);
+    
+    float scale = fontSize / (float)font->size;
+    float width = 0.0f;
+    
+    DiligentFont* fnt = static_cast<DiligentFont*>(this->font);
+    for (int i = 0; i < str.size(); i++)
+    {
+        int symbol = str[i];
+        if (symbol == '\n')
+            return width;
+        
+        render::CharacterQuad& character = fnt->chars[symbol];
+
+        width += (float)character.advance * scale;
+    }
+    return width;
+}
+float DiligentContext::measureTextHeight() {
+    assert(this->font != nullptr);
+    
+    float scale = fontSize / (float)font->size;
+    return this->font->lineHeight * scale;
 }
 
 void DiligentContext::loadFontFromMemory(std::string& json,

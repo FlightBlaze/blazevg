@@ -113,6 +113,7 @@ std::vector<TriangeIndices> createIndicesConvex(int numVertices);
 namespace math {
 
 glm::mat4 toMatrix3D(glm::mat3 mat2d);
+bool isPointInTriange(glm::vec2 a, glm::vec2 b, glm::vec2 c, glm::vec2 point);
 
 } // namespace math
 
@@ -195,8 +196,9 @@ public:
     
     virtual void textFill(std::wstring str, float x, float y);
     virtual void textFillOnPath(std::wstring str, float x = 0, float y = 0);
-    float measureTextWidth(std::wstring str);
-    float measureTextHeight();
+    
+    virtual float measureTextWidth(std::wstring str);
+    virtual float measureTextHeight();
     
     void moveTo(float x, float y);
     void lineTo(float x, float y);
@@ -222,6 +224,9 @@ protected:
     factory::ShapeMesh internalFill();
     factory::ShapeMesh internalConvexFill();
     factory::ShapeMesh internalStroke();
+    
+    std::vector<factory::TriangeIndices> debugTriangulate(std::vector<glm::vec2>& vertices,
+                                                          bool draw);
 };
 
 namespace earcut {

@@ -437,6 +437,9 @@ public:
     void textFill(std::wstring str, float x, float y);
     void textFillOnPath(std::wstring str, float x = 0, float y = 0);
     
+    float measureTextWidth(std::wstring str);
+    float measureTextHeight();
+    
     void loadFontFromMemory(std::string& json,
                             std::string fontName,
                             void* imageData,
