@@ -77,7 +77,7 @@ GradientConstants::GradientConstants(Style& style, glm::mat4& MVP, Context& cont
             this->startPos = (this->startPos + 1.0f) / 2.0f;
             this->startPos.y = 1.0f - this->startPos.y;
         {
-            // Rotate angle with rotation matrix. Angle will be non zero
+            // Rotate angle with MVP matrix. Angle will be non zero
             // if we deal with rotated matrix
             glm::vec2 point1 = glm::vec2(MVP * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
             glm::vec2 point2 = glm::vec2(MVP * glm::vec4(0.0f, -1.0f, 0.0f, 1.0f));
