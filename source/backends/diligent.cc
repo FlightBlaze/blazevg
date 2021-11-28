@@ -279,10 +279,8 @@ recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
     PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = Diligent::CULL_MODE_NONE;
     PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.StencilEnable = Diligent::True;
     Diligent::StencilOpDesc StencilDesc;
-    StencilDesc.StencilFunc = Diligent::COMPARISON_FUNC_ALWAYS;
+    StencilDesc.StencilFunc = Diligent::COMPARISON_FUNC_NOT_EQUAL;
     StencilDesc.StencilPassOp = Diligent::STENCIL_OP_REPLACE;
-    StencilDesc.StencilFailOp = StencilDesc.StencilPassOp;
-    StencilDesc.StencilDepthFailOp = StencilDesc.StencilPassOp;
     PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.FrontFace = StencilDesc;
     PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.BackFace = StencilDesc;
     PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = Diligent::False;
@@ -568,6 +566,9 @@ void DiligentContext::textFill(std::wstring str, float x, float y) {
             continue;
         }
         
+        if (character.vertexBuffer == nullptr)
+            continue;
+        
         glm::mat4 MVP = transform * glm::scale(
             glm::translate(glm::identity<glm::mat4>(), glm::vec3(pos, 0.0f)),
             glm::vec3(scale));
@@ -664,6 +665,9 @@ void DiligentContext::textFillOnPath(std::wstring str, float x, float y) {
             length += (float)character.advance * scale;
             continue;
         }
+        
+        if (character.vertexBuffer == nullptr)
+            continue;
         
         float t = tAtLengthClosed(length, polylineLengths, polylineLength, closed);
         glm::vec2 pos = factory::getPointAtT(polyline, t);
