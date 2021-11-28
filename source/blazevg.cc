@@ -889,7 +889,35 @@ float Context::measureTextHeight() {
 void Context::arc(float x, float y, float radius, float startAngle, float endAngle) {
     // Invert the angles to make the rotation clockwise
     mPolylines.push_back(factory::createArc(-startAngle, -endAngle, radius, 32, glm::vec2(x, y)));
-    mCurrentPos = mPolylines.front().back();
+    mCurrentPos = mPolylines.back().back();
+}
+
+void Context::rect(float x, float y, float width, float height) {
+    this->moveTo(x, y);
+    this->lineTo(x + width, y);
+    this->lineTo(x + width, y + height);
+    this->lineTo(x, y+height);
+    this->closePath();
+}
+
+void Context::rect(float x, float y, float width, float height, float radius) {
+    this->rect(x, y, width, height, radius, radius, radius, radius);
+}
+
+void Context::rect(float x, float y, float width, float height,
+                   float topLeftRadius, float topRightRadius,
+                   float bottomRightRadius, float bottomLeftRadius) {
+    float right = x + width;
+    float bottom = y + height;
+    this->moveTo(x, y + topLeftRadius);
+    this->quadraticTo(x, y, x + topLeftRadius, y);
+    this->lineTo(right - topRightRadius, y);
+    this->quadraticTo(right, y, right, y + topRightRadius);
+    this->lineTo(right, bottom - bottomRightRadius);
+    this->quadraticTo(right, bottom, right - bottomRightRadius, bottom);
+    this->lineTo(x + bottomLeftRadius, bottom);
+    this->quadraticTo(x, bottom, x, bottom - bottomLeftRadius);
+    this->closePath();
 }
 
 void Context::translate(float x, float y) {
