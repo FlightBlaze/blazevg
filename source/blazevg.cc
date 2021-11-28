@@ -709,13 +709,16 @@ factory::ShapeMesh Context::internalStroke() {
         if(this->lineCap != LineCap::Butt)
             gapLength += this->lineWidth;
         
+        float currentLength = 0.0f;
+        
         for(int i = 0; i < this->mPolylines.size(); i++) {
             std::vector<std::vector<glm::vec2>> dashed =
                 factory::dashedPolyline(this->mPolylines[i],
                                         this->lineDash.length,
                                         gapLength,
-                                        this->lineDash.offset);
+                                        this->lineDash.offset - currentLength);
             allPolylines->insert(allPolylines->end(), dashed.begin(), dashed.end());
+            currentLength += factory::lengthOfPolyline(this->mPolylines[i]);
         }
         
         // If shape was closed and then dashed, it
