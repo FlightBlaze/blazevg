@@ -595,6 +595,19 @@ void Context::orthographic(float width, float height) {
     this->height = height;
 }
 
+void Context::beginDrawing() {
+    if(mDrawingBegan) {
+        std::cerr << "blazevg: Error: endDrawing() is not called" << std::endl;
+        exit(-1);
+    }
+    this->mDrawingBegan = true;
+    this->mShapeDrawCounter = 0;
+}
+
+void Context::endDrawing() {
+    this->mDrawingBegan = false;
+}
+
 float round3f(float t) {
     return roundf(t * 1000.0f) / 1000.0f;
 }
@@ -1039,6 +1052,13 @@ void Font::parseJson(std::string& json) {
 
 void Font::loadCharacter(Character& character) {
     
+}
+
+void Context::assertDrawingIsBegan() {
+    if(!mDrawingBegan) {
+        std::cerr << "blazevg: Error: beginDrawing() is not called" << std::endl;
+        exit(-1);
+    }
 }
 
 Context::~Context()

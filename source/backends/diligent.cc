@@ -181,7 +181,8 @@ recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
     // StencilDesc.StencilFunc = Diligent::COMPARISON_FUNC_NEVER;
     PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.FrontFace = StencilDesc;
     PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.BackFace = StencilDesc;
-    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = Diligent::False;
+    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = Diligent::True;
+    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthFunc = Diligent::COMPARISON_FUNC_LESS;
 
     Diligent::BlendStateDesc BlendState;
     BlendState.RenderTargets[0].BlendEnable = Diligent::True;
@@ -277,12 +278,12 @@ recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
     PSOCreateInfo.GraphicsPipeline.DSVFormat = depthBufferFormat;
     PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = Diligent::PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = Diligent::CULL_MODE_NONE;
-    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.StencilEnable = Diligent::True;
-    Diligent::StencilOpDesc StencilDesc;
-    StencilDesc.StencilFunc = Diligent::COMPARISON_FUNC_NOT_EQUAL;
-    StencilDesc.StencilPassOp = Diligent::STENCIL_OP_REPLACE;
-    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.FrontFace = StencilDesc;
-    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.BackFace = StencilDesc;
+//    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.StencilEnable = Diligent::True;
+//    Diligent::StencilOpDesc StencilDesc;
+//    StencilDesc.StencilFunc = Diligent::COMPARISON_FUNC_NOT_EQUAL;
+//    StencilDesc.StencilPassOp = Diligent::STENCIL_OP_REPLACE;
+//    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.FrontFace = StencilDesc;
+//    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.BackFace = StencilDesc;
     PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = Diligent::False;
 
     Diligent::BlendStateDesc BlendState;
@@ -356,6 +357,15 @@ void Shape::draw(DiligentContext& context, Style& style) {
     
     glm::mat4 MVP = context.viewProj * math::toMatrix3D(context.matrix);
     
+    // Draw the shape in front of other one because depth buffer is enabled.
+    // When rendering, depth buffer compares current depth pixel values
+    // with those written to it. If they are the same, then it will discard
+    // them, so we need to constantly increment the Z coordinate
+    MVP = glm::translate(glm::mat4(1.0f),
+                         glm::vec3(0.0f, 0.0f, 1.0f -
+                                   (float)context.mShapeDrawCounter * 0.000001f)
+                         ) * MVP;
+    
     switch(style.type) {
         case Style::Type::SolidColor:
         {
@@ -423,6 +433,8 @@ void Shape::draw(DiligentContext& context, Style& style) {
     deviceCtx->SetStencilRef(1);
     
     deviceCtx->DrawIndexed(DrawAttrs);
+    
+    context.mShapeDrawCounter++;
 }
 
 struct CharVertex {
@@ -522,12 +534,14 @@ GlyphMSDFShaders::GlyphMSDFShaders()
 } // namespace render
 
 void DiligentContext::convexFill() {
+    this->assertDrawingIsBegan();
     factory::ShapeMesh mesh = internalConvexFill();
     render::Shape shape = render::Shape(mRenderDevice, mesh);
     shape.draw(*this, this->fillStyle);
 }
 
 void DiligentContext::fill() {
+    this->assertDrawingIsBegan();
     factory::ShapeMesh mesh = internalFill();
     render::Shape shape = render::Shape(mRenderDevice, mesh);
     shape.draw(*this, this->fillStyle);
@@ -535,12 +549,14 @@ void DiligentContext::fill() {
 }
 
 void DiligentContext::stroke() {
+    this->assertDrawingIsBegan();
     factory::ShapeMesh mesh = internalStroke();
     render::Shape shape = render::Shape(mRenderDevice, mesh);
     shape.draw(*this, this->strokeStyle);
 }
 
 void DiligentContext::textFill(std::wstring str, float x, float y) {
+    this->assertDrawingIsBegan();
     assert(this->font != nullptr);
     
     float scale = fontSize / (float)font->size;
@@ -634,6 +650,7 @@ float tAtLengthClosed(float length, std::vector<float> lengths, float fullLength
 }
 
 void DiligentContext::textFillOnPath(std::wstring str, float x, float y) {
+    this->assertDrawingIsBegan();
     assert(this->font != nullptr);
     
     std::vector<glm::vec2> polyline = this->toOnePolyline(mPolylines);

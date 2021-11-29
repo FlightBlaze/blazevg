@@ -212,6 +212,9 @@ public:
     void rotate(float a);
     void clearTransform();
     
+    void beginDrawing();
+    void endDrawing();
+    
     void beginPath();
     void closePath();
     
@@ -247,11 +250,16 @@ protected:
     bool mIsPolylineClosed = false;
     glm::vec2 mCurrentPos;
     
+    int mShapeDrawCounter = 0;
+    bool mDrawingBegan = false;
+    
     std::vector<glm::vec2> toOnePolyline(std::vector<std::vector<glm::vec2>> polylines);
     
     factory::ShapeMesh internalFill();
     factory::ShapeMesh internalConvexFill();
     factory::ShapeMesh internalStroke();
+    
+    void assertDrawingIsBegan();
     
     std::vector<factory::TriangeIndices> debugTriangulate(std::vector<glm::vec2>& vertices,
                                                           bool draw);
