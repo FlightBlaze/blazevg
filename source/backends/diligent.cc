@@ -284,7 +284,8 @@ recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
 //    StencilDesc.StencilPassOp = Diligent::STENCIL_OP_REPLACE;
 //    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.FrontFace = StencilDesc;
 //    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.BackFace = StencilDesc;
-    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = Diligent::False;
+    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = Diligent::True;
+    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthFunc = Diligent::COMPARISON_FUNC_LESS;
 
     Diligent::BlendStateDesc BlendState;
     BlendState.RenderTargets[0].BlendEnable = Diligent::True;
@@ -363,7 +364,7 @@ void Shape::draw(DiligentContext& context, Style& style) {
     // them, so we need to constantly increment the Z coordinate
     MVP = glm::translate(glm::mat4(1.0f),
                          glm::vec3(0.0f, 0.0f, 1.0f -
-                                   (float)context.mShapeDrawCounter * 0.000001f)
+                                   ((float)context.mShapeDrawCounter + 1.0f) * 0.000001f)
                          ) * MVP;
     
     switch(style.type) {

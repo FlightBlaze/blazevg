@@ -597,7 +597,7 @@ void Context::orthographic(float width, float height) {
 
 void Context::beginDrawing() {
     if(mDrawingBegan) {
-        std::cerr << "blazevg: Error: endDrawing() is not called" << std::endl;
+        std::cerr << "blazevg: Error: endDrawing() is not called before rendering" << std::endl;
         exit(-1);
     }
     this->mDrawingBegan = true;
