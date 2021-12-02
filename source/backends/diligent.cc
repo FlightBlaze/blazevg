@@ -9,12 +9,14 @@ DiligentContext::DiligentContext(float width, float height,
                 Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
                 Diligent::RefCntAutoPtr<Diligent::IDeviceContext> deviceContext,
                 Diligent::TEXTURE_FORMAT colorBufferFormat,
-                Diligent::TEXTURE_FORMAT depthBufferFormat):
+                Diligent::TEXTURE_FORMAT depthBufferFormat,
+                int numSamples):
     Context(width, height),
     mRenderDevice(renderDevice),
     mDeviceContext(deviceContext),
     mColorBufferFormat(colorBufferFormat),
-    mDepthBufferFormat(depthBufferFormat)
+    mDepthBufferFormat(depthBufferFormat),
+    mNumSamples(numSamples)
 {
     initPipelineState();
 }
@@ -26,11 +28,13 @@ DiligentContext::DiligentContext()
 void DiligentContext::initPipelineState() {
     mSolidColorPSO = render::SolidColorPipelineState(mRenderDevice,
                                                      mColorBufferFormat,
-                                                     mDepthBufferFormat);
+                                                     mDepthBufferFormat,
+                                                     mNumSamples);
     
     mGradientPSO = render::GradientPipelineState(mRenderDevice,
-                                                     mColorBufferFormat,
-                                                     mDepthBufferFormat);
+                                                 mColorBufferFormat,
+                                                 mDepthBufferFormat,
+                                                 mNumSamples);
     
     mGlyphShaders = render::GlyphMSDFShaders(mRenderDevice);
 }
@@ -116,9 +120,10 @@ Diligent::InputLayoutDesc createInputLayoutDesc() {
 SolidColorPipelineState::
 SolidColorPipelineState(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
                         Diligent::TEXTURE_FORMAT colorBufferFormat,
-                        Diligent::TEXTURE_FORMAT depthBufferFormat) {
+                        Diligent::TEXTURE_FORMAT depthBufferFormat,
+                        int numSamples) {
     createShaders(renderDevice);
-    recreate(renderDevice, colorBufferFormat, depthBufferFormat);
+    recreate(renderDevice, colorBufferFormat, depthBufferFormat, numSamples);
     this->isInitialized = true;
 }
 
@@ -166,11 +171,13 @@ createShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice) {
 void SolidColorPipelineState::
 recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
          Diligent::TEXTURE_FORMAT colorBufferFormat,
-         Diligent::TEXTURE_FORMAT depthBufferFormat)
+         Diligent::TEXTURE_FORMAT depthBufferFormat,
+         int numSamples)
 {
     Diligent::GraphicsPipelineStateCreateInfo PSOCreateInfo;
     PSOCreateInfo.PSODesc.Name = "blazevg solid color PSO";
     PSOCreateInfo.PSODesc.PipelineType = Diligent::PIPELINE_TYPE_GRAPHICS;
+    PSOCreateInfo.GraphicsPipeline.SmplDesc.Count = numSamples;
     PSOCreateInfo.GraphicsPipeline.NumRenderTargets = 1;
     PSOCreateInfo.GraphicsPipeline.RTVFormats[0] = colorBufferFormat;
     PSOCreateInfo.GraphicsPipeline.DSVFormat = depthBufferFormat;
@@ -202,6 +209,9 @@ recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
     PSOCreateInfo.GraphicsPipeline.InputLayout.NumElements = _countof(LayoutElems);
     
     PSOCreateInfo.PSODesc.ResourceLayout.DefaultVariableType = Diligent::SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
+    
+    PSO.Release();
+    SRB.Release();
 
     renderDevice->CreateGraphicsPipelineState(PSOCreateInfo, &PSO);
 
@@ -217,10 +227,11 @@ SolidColorPipelineState::SolidColorPipelineState()
 
 GradientPipelineState::
 GradientPipelineState(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
-                        Diligent::TEXTURE_FORMAT colorBufferFormat,
-                        Diligent::TEXTURE_FORMAT depthBufferFormat) {
+                      Diligent::TEXTURE_FORMAT colorBufferFormat,
+                      Diligent::TEXTURE_FORMAT depthBufferFormat,
+                      int numSamples) {
     createShaders(renderDevice);
-    recreate(renderDevice, colorBufferFormat, depthBufferFormat);
+    recreate(renderDevice, colorBufferFormat, depthBufferFormat, numSamples);
     this->isInitialized = true;
 }
 
@@ -268,11 +279,13 @@ createShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice) {
 void GradientPipelineState::
 recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
          Diligent::TEXTURE_FORMAT colorBufferFormat,
-         Diligent::TEXTURE_FORMAT depthBufferFormat)
+         Diligent::TEXTURE_FORMAT depthBufferFormat,
+         int numSamples)
 {
     Diligent::GraphicsPipelineStateCreateInfo PSOCreateInfo;
     PSOCreateInfo.PSODesc.Name = "blazevg linear gradient PSO";
     PSOCreateInfo.PSODesc.PipelineType = Diligent::PIPELINE_TYPE_GRAPHICS;
+    PSOCreateInfo.GraphicsPipeline.SmplDesc.Count = numSamples;
     PSOCreateInfo.GraphicsPipeline.NumRenderTargets = 1;
     PSOCreateInfo.GraphicsPipeline.RTVFormats[0] = colorBufferFormat;
     PSOCreateInfo.GraphicsPipeline.DSVFormat = depthBufferFormat;
@@ -306,6 +319,9 @@ recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
     
     PSOCreateInfo.PSODesc.ResourceLayout.DefaultVariableType = Diligent::SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
 
+    PSO.Release();
+    SRB.Release();
+    
     renderDevice->CreateGraphicsPipelineState(PSOCreateInfo, &PSO);
 
     PSO->GetStaticVariableByName(Diligent::SHADER_TYPE_VERTEX, "Constants")->Set(VSConstants);
@@ -565,6 +581,10 @@ void DiligentContext::textFill(std::wstring str, float x, float y) {
     glm::mat4 transform = this->viewProj * math::toMatrix3D(this->matrix);
     
     DiligentFont* fnt = static_cast<DiligentFont*>(this->font);
+    fnt->recreatePipelineState(mColorBufferFormat,
+                               mDepthBufferFormat,
+                               mNumSamples);
+    
     for (int i = 0; i < str.size(); i++)
     {
         int symbol = str[i];
@@ -668,6 +688,10 @@ void DiligentContext::textFillOnPath(std::wstring str, float x, float y) {
     bool closed = mIsPolylineClosed;
     
     DiligentFont* fnt = static_cast<DiligentFont*>(this->font);
+    fnt->recreatePipelineState(mColorBufferFormat,
+                               mDepthBufferFormat,
+                               mNumSamples);
+    
     for (int i = 0; i < str.size(); i++)
     {
         int symbol = str[i];
@@ -803,6 +827,7 @@ void DiligentContext::loadFontFromMemory(std::string& json,
     DiligentFont* font = new DiligentFont(mRenderDevice,
                                           mColorBufferFormat,
                                           mDepthBufferFormat,
+                                          this->mNumSamples,
                                           json,
                                           imageData,
                                           width,
@@ -815,6 +840,7 @@ void DiligentContext::loadFontFromMemory(std::string& json,
 DiligentFont::DiligentFont(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
                            Diligent::TEXTURE_FORMAT colorBufferFormat,
                            Diligent::TEXTURE_FORMAT depthBufferFormat,
+                           int numSamples,
                            std::string& json,
                            void* imageData,
                            int width,
@@ -825,7 +851,7 @@ DiligentFont::DiligentFont(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> rend
     mContext(context)
 {
     createTexture(colorBufferFormat, imageData, width, height, numChannels);
-    recreatePipelineState(colorBufferFormat, depthBufferFormat);
+    recreatePipelineState(colorBufferFormat, depthBufferFormat, numSamples);
     this->parseJson(json);
 }
 
@@ -884,10 +910,22 @@ void DiligentFont::createTexture(Diligent::TEXTURE_FORMAT colorBufferFormat,
 }
 
 void DiligentFont::recreatePipelineState(Diligent::TEXTURE_FORMAT colorBufferFormat,
-                                         Diligent::TEXTURE_FORMAT depthBufferFormat) {
+                                         Diligent::TEXTURE_FORMAT depthBufferFormat,
+                                         int numSamples) {
+    if(mColorBufferFormat == colorBufferFormat &&
+       mDepthBufferFormat == depthBufferFormat &&
+       mNumSamples == numSamples) {
+        return;
+    }
+    
+    mColorBufferFormat = colorBufferFormat;
+    mDepthBufferFormat = depthBufferFormat;
+    mNumSamples = numSamples;
+    
     Diligent::GraphicsPipelineStateCreateInfo PSOCreateInfo;
     PSOCreateInfo.PSODesc.Name = "blazevg font PSO";
     PSOCreateInfo.PSODesc.PipelineType = Diligent::PIPELINE_TYPE_GRAPHICS;
+    PSOCreateInfo.GraphicsPipeline.SmplDesc.Count = numSamples;
     PSOCreateInfo.GraphicsPipeline.NumRenderTargets = 1;
     PSOCreateInfo.GraphicsPipeline.RTVFormats[0] = colorBufferFormat;
     PSOCreateInfo.GraphicsPipeline.DSVFormat = depthBufferFormat;
@@ -931,6 +969,9 @@ void DiligentFont::recreatePipelineState(Diligent::TEXTURE_FORMAT colorBufferFor
     PSOCreateInfo.PSODesc.ResourceLayout.ImmutableSamplers = samplers;
     PSOCreateInfo.PSODesc.ResourceLayout.NumImmutableSamplers = _countof(samplers);
 
+    PSO.Release();
+    SRB.Release();
+    
     mRenderDevice->CreateGraphicsPipelineState(PSOCreateInfo, &PSO);
 
     PSO->GetStaticVariableByName(Diligent::SHADER_TYPE_VERTEX, "Constants")->
@@ -945,6 +986,26 @@ void DiligentFont::recreatePipelineState(Diligent::TEXTURE_FORMAT colorBufferFor
 
 void DiligentFont::loadCharacter(Character& character) {
     this->chars[character.unicode] = render::CharacterQuad(mRenderDevice, character, this->size);
+}
+
+void DiligentContext::
+setupPipelineStates(Diligent::TEXTURE_FORMAT colorBufferFormat,
+                    Diligent::TEXTURE_FORMAT depthBufferFormat,
+                    int numSamples) {
+    if(mColorBufferFormat == colorBufferFormat &&
+       mDepthBufferFormat == depthBufferFormat &&
+       mNumSamples == numSamples) {
+        return;
+    }
+    
+    mColorBufferFormat = colorBufferFormat;
+    mDepthBufferFormat = depthBufferFormat;
+    mNumSamples = numSamples;
+    
+    mSolidColorPSO.recreate(mRenderDevice, mColorBufferFormat, mDepthBufferFormat,
+                            numSamples);
+    mGradientPSO.recreate(mRenderDevice, mColorBufferFormat, mDepthBufferFormat,
+                            numSamples);
 }
 
 } // namespace bvg

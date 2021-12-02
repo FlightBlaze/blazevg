@@ -86,14 +86,16 @@ struct LineDash {
     float length, gapLength, offset;
 };
 
-enum class BlendingMode {
-    Normal,
-    Add,
-    Subtract,
-    Multiply,
-    Divide,
-    Screen,
-    Difference
+enum class BlendingMode : int {
+    Normal = 0,
+    Add = 1,
+    Subtract = 2,
+    Multiply = 3,
+    Divide = 4,
+    Screen = 5,
+    Overlay = 6,
+    Darker = 7,
+    Lighter = 8
 };
 
 namespace factory {
@@ -181,6 +183,8 @@ public:
     glm::mat4 viewProj = glm::mat4(1.0f);
     glm::mat3 matrix = glm::mat3(1.0f);
     
+    BlendingMode blendingMode = BlendingMode::Normal;
+    
     LineJoin lineJoin = LineJoin::Miter;
     LineCap lineCap = LineCap::Butt;
     LineDash lineDash = LineDash();
@@ -212,8 +216,8 @@ public:
     void rotate(float a);
     void clearTransform();
     
-    void beginDrawing();
-    void endDrawing();
+    virtual void beginDrawing();
+    virtual void endDrawing();
     
     void beginPath();
     void closePath();

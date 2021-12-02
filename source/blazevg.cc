@@ -203,6 +203,13 @@ std::vector<glm::vec2> createArc(float startAngle, float endAngle, float radius,
     return arcVerts;
 }
 
+glm::vec2 meanPointOnArc(float startAngle, float endAngle, float radius) {
+    float angle = (startAngle + endAngle) / 2.0f;
+    float x = sin(angle) * radius;
+    float y = cos(angle) * radius;
+    return glm::vec2(x, y);
+}
+
 float positiveAngle(float angle) {
     if(angle < 0) {
         return M_PI * 2 + angle;
@@ -251,10 +258,12 @@ ShapeMesh roundJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const 
         end = atan2f(Dd.x, Dd.y) + 0.1f;
         up = Bd;
     }
-    curve = createArc(start, end, radius, 32, center);
     
-    // if arc is inverted
-    if(glm::dot(glm::normalize(curve.at(15) - center), up) < 0) {
+    glm::vec2 meanOnArc = meanPointOnArc(start, end, radius);
+    if(glm::dot(glm::normalize(meanOnArc), up) >= 0) {
+        curve = createArc(start, end, radius, 32, center);
+    } else {
+        // if arc is inverted
         start = positiveAngle(start);
         end = positiveAngle(end);
         curve = createArc(start, end, radius, 32, center);

@@ -41,6 +41,8 @@ struct PSOutput
 void main(in  PSInput  PSIn,
           out PSOutput PSOut)
 {
+    // float2 UV = PSIn.Pos / g_Resolution;
+
     PSOut.Color = g_Color;
 }
 )";
@@ -83,6 +85,9 @@ cbuffer Constants
     float g_RadiusOrAngle;
     int g_Type;
 };
+
+Texture2D    g_Background;
+SamplerState g_Background_sampler;
 
 struct PSInput
 {
@@ -354,14 +359,16 @@ class SolidColorPipelineState {
 public:
     SolidColorPipelineState(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
                             Diligent::TEXTURE_FORMAT colorBufferFormat,
-                            Diligent::TEXTURE_FORMAT depthBufferFormat);
+                            Diligent::TEXTURE_FORMAT depthBufferFormat,
+                            int numSamples = 1);
     SolidColorPipelineState();
     
     bool isInitialized = false;
     
     void recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
                   Diligent::TEXTURE_FORMAT colorBufferFormat,
-                  Diligent::TEXTURE_FORMAT depthBufferFormat);
+                  Diligent::TEXTURE_FORMAT depthBufferFormat,
+                  int numSamples = 1);
     
     Diligent::RefCntAutoPtr<Diligent::IBuffer> VSConstants;
     Diligent::RefCntAutoPtr<Diligent::IBuffer> PSConstants;
@@ -369,6 +376,7 @@ public:
     Diligent::RefCntAutoPtr<Diligent::IShaderResourceBinding> SRB;
     Diligent::RefCntAutoPtr<Diligent::IShader> PS;
     Diligent::RefCntAutoPtr<Diligent::IShader> VS;
+    int numSamples = 1;
     
 private:
     void createShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice);
@@ -377,15 +385,17 @@ private:
 class GradientPipelineState {
 public:
     GradientPipelineState(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
-                            Diligent::TEXTURE_FORMAT colorBufferFormat,
-                            Diligent::TEXTURE_FORMAT depthBufferFormat);
+                          Diligent::TEXTURE_FORMAT colorBufferFormat,
+                          Diligent::TEXTURE_FORMAT depthBufferFormat,
+                          int numSamples = 1);
     GradientPipelineState();
     
     bool isInitialized = false;
     
     void recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
                   Diligent::TEXTURE_FORMAT colorBufferFormat,
-                  Diligent::TEXTURE_FORMAT depthBufferFormat);
+                  Diligent::TEXTURE_FORMAT depthBufferFormat,
+                  int numSamples = 1);
     
     Diligent::RefCntAutoPtr<Diligent::IBuffer> VSConstants;
     Diligent::RefCntAutoPtr<Diligent::IBuffer> PSConstants;
@@ -393,6 +403,7 @@ public:
     Diligent::RefCntAutoPtr<Diligent::IShaderResourceBinding> SRB;
     Diligent::RefCntAutoPtr<Diligent::IShader> PS;
     Diligent::RefCntAutoPtr<Diligent::IShader> VS;
+    int numSamples = 1;
     
 private:
     void createShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice);
@@ -415,10 +426,6 @@ public:
     Diligent::RefCntAutoPtr<Diligent::IBuffer> quadIndexBuffer;
 };
 
-struct PipelineConfiguration {
-    BlendingMode blendingMode;
-};
-
 class CharacterQuad {
 public:
     CharacterQuad(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
@@ -436,6 +443,7 @@ public:
     DiligentFont(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
                  Diligent::TEXTURE_FORMAT colorBufferFormat,
                  Diligent::TEXTURE_FORMAT depthBufferFormat,
+                 int numSamples,
                  std::string& json,
                  void* imageData,
                  int width,
@@ -452,7 +460,8 @@ public:
     Diligent::RefCntAutoPtr<Diligent::ITextureView> textureSRV;
     
     void recreatePipelineState(Diligent::TEXTURE_FORMAT colorBufferFormat,
-                               Diligent::TEXTURE_FORMAT depthBufferFormat);
+                               Diligent::TEXTURE_FORMAT depthBufferFormat,
+                               int numSamples);
     
 private:
     void createTexture(Diligent::TEXTURE_FORMAT colorBufferFormat,
@@ -464,6 +473,9 @@ private:
     Diligent::RefCntAutoPtr<Diligent::ITexture> mTexture;
     Diligent::RefCntAutoPtr<Diligent::IRenderDevice> mRenderDevice;
     DiligentContext& mContext;
+    Diligent::TEXTURE_FORMAT mColorBufferFormat;
+    Diligent::TEXTURE_FORMAT mDepthBufferFormat;
+    int mNumSamples = 1;
 };
 
 class DiligentContext : public Context {
@@ -475,7 +487,8 @@ public:
                     Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
                     Diligent::RefCntAutoPtr<Diligent::IDeviceContext> deviceContext,
                     Diligent::TEXTURE_FORMAT colorBufferFormat,
-                    Diligent::TEXTURE_FORMAT depthBufferFormat);
+                    Diligent::TEXTURE_FORMAT depthBufferFormat,
+                    int numSamples = 1);
     
     DiligentContext();
     
@@ -496,6 +509,10 @@ public:
                             int height,
                             int numChannels);
     
+    void setupPipelineStates(Diligent::TEXTURE_FORMAT colorBufferFormat,
+                             Diligent::TEXTURE_FORMAT depthBufferFormat,
+                             int numSamples);
+    
 private:
     Diligent::RefCntAutoPtr<Diligent::IRenderDevice> mRenderDevice;
     Diligent::RefCntAutoPtr<Diligent::IDeviceContext> mDeviceContext;
@@ -505,6 +522,8 @@ private:
     render::GradientPipelineState mGradientPSO;
     render::SolidColorPipelineState mSolidColorPSO;
     render::GlyphMSDFShaders mGlyphShaders;
+    
+    int mNumSamples = 1;
     
     void initPipelineState();
 };
