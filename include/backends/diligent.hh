@@ -368,6 +368,7 @@ public:
     void recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
                   Diligent::TEXTURE_FORMAT colorBufferFormat,
                   Diligent::TEXTURE_FORMAT depthBufferFormat,
+                  BlendingMode blendingMode,
                   int numSamples = 1);
     
     Diligent::RefCntAutoPtr<Diligent::IBuffer> VSConstants;
@@ -395,6 +396,7 @@ public:
     void recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
                   Diligent::TEXTURE_FORMAT colorBufferFormat,
                   Diligent::TEXTURE_FORMAT depthBufferFormat,
+                  BlendingMode blendingMode,
                   int numSamples = 1);
     
     Diligent::RefCntAutoPtr<Diligent::IBuffer> VSConstants;

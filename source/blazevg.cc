@@ -1103,6 +1103,37 @@ bool isPointInTriange(glm::vec2 a, glm::vec2 b, glm::vec2 c, glm::vec2 point) {
 
 } // namespace math
 
+bool isPointInsideShapeMesh(float x, float y, factory::ShapeMesh& mesh, glm::mat3 matrix) {
+    for(int i = 0; i < mesh.indices.size(); i++) {
+        factory::TriangeIndices tri = mesh.indices.at(i);
+        glm::vec2 A = mesh.vertices.at(tri.a);
+        glm::vec2 B = mesh.vertices.at(tri.b);
+        glm::vec2 C = mesh.vertices.at(tri.c);
+        A = matrix * glm::vec3(A, 1.0f);
+        B = matrix * glm::vec3(B, 1.0f);
+        C = matrix * glm::vec3(C, 1.0f);
+        glm::vec2 point = matrix * glm::vec3(x, y, 1.0f);
+        if(math::isPointInTriange(A, B, C, point))
+            return true;
+    }
+    return false;
+}
+
+bool Context::isPointInsideStroke(float x, float y) {
+    factory::ShapeMesh mesh = this->internalStroke();
+    return isPointInsideShapeMesh(x, y, mesh, this->matrix);
+}
+
+bool Context::isPointInsideConvexFill(float x, float y) {
+    factory::ShapeMesh mesh = this->internalConvexFill();
+    return isPointInsideShapeMesh(x, y, mesh, this->matrix);
+}
+
+bool Context::isPointInsideFill(float x, float y) {
+    factory::ShapeMesh mesh = this->internalFill();
+    return isPointInsideShapeMesh(x, y, mesh, this->matrix);
+}
+
 namespace earcut {
 
 std::vector<factory::TriangeIndices> triangulate(std::vector<glm::vec2>& vertices) {

@@ -247,6 +247,10 @@ public:
               float topLeftRadius, float topRightRadius,
               float bottomRightRadius, float bottomLeftRadius);
     
+    bool isPointInsideStroke(float x, float y);
+    bool isPointInsideConvexFill(float x, float y);
+    bool isPointInsideFill(float x, float y);
+    
     virtual ~Context();
     
 protected:

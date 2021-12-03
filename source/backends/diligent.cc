@@ -123,7 +123,8 @@ SolidColorPipelineState(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderD
                         Diligent::TEXTURE_FORMAT depthBufferFormat,
                         int numSamples) {
     createShaders(renderDevice);
-    recreate(renderDevice, colorBufferFormat, depthBufferFormat, numSamples);
+    recreate(renderDevice, colorBufferFormat, depthBufferFormat,
+             BlendingMode::Normal,numSamples);
     this->isInitialized = true;
 }
 
@@ -172,6 +173,7 @@ void SolidColorPipelineState::
 recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
          Diligent::TEXTURE_FORMAT colorBufferFormat,
          Diligent::TEXTURE_FORMAT depthBufferFormat,
+         BlendingMode blendingMode,
          int numSamples)
 {
     Diligent::GraphicsPipelineStateCreateInfo PSOCreateInfo;
@@ -231,7 +233,8 @@ GradientPipelineState(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDev
                       Diligent::TEXTURE_FORMAT depthBufferFormat,
                       int numSamples) {
     createShaders(renderDevice);
-    recreate(renderDevice, colorBufferFormat, depthBufferFormat, numSamples);
+    recreate(renderDevice, colorBufferFormat, depthBufferFormat,
+             BlendingMode::Normal, numSamples);
     this->isInitialized = true;
 }
 
@@ -280,6 +283,7 @@ void GradientPipelineState::
 recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
          Diligent::TEXTURE_FORMAT colorBufferFormat,
          Diligent::TEXTURE_FORMAT depthBufferFormat,
+         BlendingMode blendingMode,
          int numSamples)
 {
     Diligent::GraphicsPipelineStateCreateInfo PSOCreateInfo;
@@ -995,7 +999,7 @@ setupPipelineStates(Diligent::TEXTURE_FORMAT colorBufferFormat,
     if(mColorBufferFormat == colorBufferFormat &&
        mDepthBufferFormat == depthBufferFormat &&
        mNumSamples == numSamples) {
-        return;
+         return;
     }
     
     mColorBufferFormat = colorBufferFormat;
@@ -1003,9 +1007,9 @@ setupPipelineStates(Diligent::TEXTURE_FORMAT colorBufferFormat,
     mNumSamples = numSamples;
     
     mSolidColorPSO.recreate(mRenderDevice, mColorBufferFormat, mDepthBufferFormat,
-                            numSamples);
+                            this->blendingMode, numSamples);
     mGradientPSO.recreate(mRenderDevice, mColorBufferFormat, mDepthBufferFormat,
-                            numSamples);
+                          this->blendingMode, numSamples);
 }
 
 } // namespace bvg
