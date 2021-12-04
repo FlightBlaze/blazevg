@@ -198,7 +198,7 @@ std::vector<glm::vec2> createArc(float startAngle, float endAngle, float radius,
         float y = cos(angle) * radius;
 
         arcVerts[i] = glm::vec2(x, y) + offset;
-        angle += (arcLength / segments);
+        angle += arcLength / (segments - 1);
     }
     return arcVerts;
 }
@@ -912,8 +912,15 @@ float Context::measureTextHeight() {
 }
 
 void Context::arc(float x, float y, float radius, float startAngle, float endAngle) {
+    int segments = 32;
+    if(radius > 30.0f)
+        segments = 48;
+    if(radius > 60.0f)
+        segments = 64;
+    
     // Invert the angles to make the rotation clockwise
-    mPolylines.push_back(factory::createArc(-startAngle, -endAngle, radius, 32, glm::vec2(x, y)));
+    mPolylines.push_back(factory::createArc(-startAngle, -endAngle, radius, segments,
+                                            glm::vec2(x, y)));
     mCurrentPos = mPolylines.back().back();
 }
 
