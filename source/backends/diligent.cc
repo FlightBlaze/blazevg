@@ -26,12 +26,12 @@ DiligentContext::DiligentContext()
 }
 
 void DiligentContext::initPipelineState() {
-    mSolidColorPSO = render::SolidColorPipelineState(mRenderDevice,
+    mSolidColorPSO = render::SolidColorPipelineStates(mRenderDevice,
                                                      mColorBufferFormat,
                                                      mDepthBufferFormat,
                                                      mNumSamples);
     
-    mGradientPSO = render::GradientPipelineState(mRenderDevice,
+    mGradientPSO = render::GradientPipelineStates(mRenderDevice,
                                                  mColorBufferFormat,
                                                  mDepthBufferFormat,
                                                  mNumSamples);
@@ -117,8 +117,73 @@ Diligent::InputLayoutDesc createInputLayoutDesc() {
     return Desc;
 }
 
-SolidColorPipelineState::
-SolidColorPipelineState(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+PipelineState::PipelineState(PipelineStateConfiguration conf,
+                             Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice)
+{
+    Diligent::GraphicsPipelineStateCreateInfo PSOCreateInfo;
+    PSOCreateInfo.PSODesc.Name = conf.name.c_str();
+    PSOCreateInfo.PSODesc.PipelineType = Diligent::PIPELINE_TYPE_GRAPHICS;
+    PSOCreateInfo.GraphicsPipeline.SmplDesc.Count = conf.numSamples;
+    PSOCreateInfo.GraphicsPipeline.NumRenderTargets = 1;
+    PSOCreateInfo.GraphicsPipeline.RTVFormats[0] = conf.colorBufferFormat;
+    PSOCreateInfo.GraphicsPipeline.DSVFormat = conf.depthBufferFormat;
+    PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = Diligent::PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = Diligent::CULL_MODE_NONE;
+    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.StencilEnable = Diligent::True;
+    Diligent::StencilOpDesc StencilDesc;
+    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.FrontFace = StencilDesc;
+    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.BackFace = StencilDesc;
+    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = Diligent::True;
+    if(!conf.isClippingMask) {
+        PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthFunc =
+            Diligent::COMPARISON_FUNC_LESS;
+    } else {
+        PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthFunc =
+            Diligent::COMPARISON_FUNC_ALWAYS;
+    }
+
+    Diligent::BlendStateDesc BlendState;
+    BlendState.RenderTargets[0].BlendEnable = Diligent::True;
+    BlendState.RenderTargets[0].SrcBlend = Diligent::BLEND_FACTOR_SRC_ALPHA;
+    BlendState.RenderTargets[0].DestBlend = Diligent::BLEND_FACTOR_INV_SRC_ALPHA;
+    PSOCreateInfo.GraphicsPipeline.BlendDesc = BlendState;
+
+    PSOCreateInfo.pVS = conf.vertexShader;
+    PSOCreateInfo.pPS = conf.pixelShader;
+
+    Diligent::LayoutElement LayoutElems[] =
+    {
+        // Attribute 0 - vertex position 2D
+        Diligent::LayoutElement{0, 0, 2, Diligent::VT_FLOAT32, Diligent::False}
+    };
+    PSOCreateInfo.GraphicsPipeline.InputLayout.LayoutElements = LayoutElems;
+    PSOCreateInfo.GraphicsPipeline.InputLayout.NumElements = _countof(LayoutElems);
+    
+    PSOCreateInfo.PSODesc.ResourceLayout.DefaultVariableType = Diligent::SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
+    
+    PSO.Release();
+    SRB.Release();
+
+    renderDevice->CreateGraphicsPipelineState(PSOCreateInfo, &PSO);
+
+    if(conf.VSConstants != nullptr) {
+        PSO->GetStaticVariableByName(Diligent::SHADER_TYPE_VERTEX, "Constants")->
+            Set(conf.VSConstants);
+    }
+    if(conf.PSConstants != nullptr) {
+        PSO->GetStaticVariableByName(Diligent::SHADER_TYPE_PIXEL, "Constants")->
+            Set(conf.PSConstants);
+    }
+
+    PSO->CreateShaderResourceBinding(&SRB, true);
+}
+
+PipelineState::PipelineState()
+{
+}
+
+SolidColorPipelineStates::
+SolidColorPipelineStates(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
                         Diligent::TEXTURE_FORMAT colorBufferFormat,
                         Diligent::TEXTURE_FORMAT depthBufferFormat,
                         int numSamples) {
@@ -128,7 +193,7 @@ SolidColorPipelineState(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderD
     this->isInitialized = true;
 }
 
-void SolidColorPipelineState::
+void SolidColorPipelineStates::
 createShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice) {
     Diligent::ShaderCreateInfo ShaderCI;
     ShaderCI.SourceLanguage = Diligent::SHADER_SOURCE_LANGUAGE_HLSL;
@@ -169,66 +234,35 @@ createShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice) {
     }
 }
 
-void SolidColorPipelineState::
+void SolidColorPipelineStates::
 recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
          Diligent::TEXTURE_FORMAT colorBufferFormat,
          Diligent::TEXTURE_FORMAT depthBufferFormat,
          BlendingMode blendingMode,
          int numSamples)
 {
-    Diligent::GraphicsPipelineStateCreateInfo PSOCreateInfo;
-    PSOCreateInfo.PSODesc.Name = "blazevg solid color PSO";
-    PSOCreateInfo.PSODesc.PipelineType = Diligent::PIPELINE_TYPE_GRAPHICS;
-    PSOCreateInfo.GraphicsPipeline.SmplDesc.Count = numSamples;
-    PSOCreateInfo.GraphicsPipeline.NumRenderTargets = 1;
-    PSOCreateInfo.GraphicsPipeline.RTVFormats[0] = colorBufferFormat;
-    PSOCreateInfo.GraphicsPipeline.DSVFormat = depthBufferFormat;
-    PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = Diligent::PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = Diligent::CULL_MODE_NONE;
-    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.StencilEnable = Diligent::True;
-    Diligent::StencilOpDesc StencilDesc;
-    // StencilDesc.StencilFunc = Diligent::COMPARISON_FUNC_NEVER;
-    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.FrontFace = StencilDesc;
-    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.BackFace = StencilDesc;
-    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = Diligent::True;
-    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthFunc = Diligent::COMPARISON_FUNC_LESS;
-
-    Diligent::BlendStateDesc BlendState;
-    BlendState.RenderTargets[0].BlendEnable = Diligent::True;
-    BlendState.RenderTargets[0].SrcBlend = Diligent::BLEND_FACTOR_SRC_ALPHA;
-    BlendState.RenderTargets[0].DestBlend = Diligent::BLEND_FACTOR_INV_SRC_ALPHA;
-    PSOCreateInfo.GraphicsPipeline.BlendDesc = BlendState;
-
-    PSOCreateInfo.pVS = VS;
-    PSOCreateInfo.pPS = PS;
-
-    Diligent::LayoutElement LayoutElems[] =
-    {
-        // Attribute 0 - vertex position 2D
-        Diligent::LayoutElement{0, 0, 2, Diligent::VT_FLOAT32, Diligent::False}
-    };
-    PSOCreateInfo.GraphicsPipeline.InputLayout.LayoutElements = LayoutElems;
-    PSOCreateInfo.GraphicsPipeline.InputLayout.NumElements = _countof(LayoutElems);
-    
-    PSOCreateInfo.PSODesc.ResourceLayout.DefaultVariableType = Diligent::SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
-    
-    PSO.Release();
-    SRB.Release();
-
-    renderDevice->CreateGraphicsPipelineState(PSOCreateInfo, &PSO);
-
-    PSO->GetStaticVariableByName(Diligent::SHADER_TYPE_VERTEX, "Constants")->Set(VSConstants);
-    PSO->GetStaticVariableByName(Diligent::SHADER_TYPE_PIXEL, "Constants")->Set(PSConstants);
-
-    PSO->CreateShaderResourceBinding(&SRB, true);
+    PipelineStateConfiguration conf;
+    conf.name = "Normal PSO";
+    conf.pixelShader = PS;
+    conf.vertexShader = VS;
+    conf.PSConstants = PSConstants;
+    conf.VSConstants = VSConstants;
+    conf.colorBufferFormat = colorBufferFormat;
+    conf.depthBufferFormat = depthBufferFormat;
+    conf.isClippingMask = false;
+    conf.numSamples = numSamples;
+    normalPSO = PipelineState(conf, renderDevice);
+    conf.name = "Clip PSO";
+    conf.isClippingMask = true;
+    clipPSO = PipelineState(conf, renderDevice);
 }
 
-SolidColorPipelineState::SolidColorPipelineState()
+SolidColorPipelineStates::SolidColorPipelineStates()
 {
 }
 
-GradientPipelineState::
-GradientPipelineState(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+GradientPipelineStates::
+GradientPipelineStates(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
                       Diligent::TEXTURE_FORMAT colorBufferFormat,
                       Diligent::TEXTURE_FORMAT depthBufferFormat,
                       int numSamples) {
@@ -238,7 +272,7 @@ GradientPipelineState(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDev
     this->isInitialized = true;
 }
 
-void GradientPipelineState::
+void GradientPipelineStates::
 createShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice) {
     Diligent::ShaderCreateInfo ShaderCI;
     ShaderCI.SourceLanguage = Diligent::SHADER_SOURCE_LANGUAGE_HLSL;
@@ -279,7 +313,7 @@ createShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice) {
     }
 }
 
-void GradientPipelineState::
+void GradientPipelineStates::
 recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
          Diligent::TEXTURE_FORMAT colorBufferFormat,
          Diligent::TEXTURE_FORMAT depthBufferFormat,
@@ -334,7 +368,7 @@ recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
     PSO->CreateShaderResourceBinding(&SRB, true);
 }
 
-GradientPipelineState::GradientPipelineState()
+GradientPipelineStates::GradientPipelineStates()
 {
 }
 
@@ -387,7 +421,32 @@ void Shape::draw(DiligentContext& context, Style& style) {
                                    ((float)context.mShapeDrawCounter + 1.0f) * 0.000001f)
                          ) * MVP;
     
-    switch(style.type) {
+    if(context.mIsClipping) {
+        {
+            Diligent::MapHelper<shader::VSConstants> CBConstants(deviceCtx,
+                                                                 context.mSolidColorPSO
+                                                                        .VSConstants,
+                                                                 Diligent::MAP_WRITE,
+                                                                 Diligent::MAP_FLAG_DISCARD);
+            shader::VSConstants c;
+            c.MVP = glm::transpose(MVP);
+            *CBConstants = c;
+        }
+        {
+            Diligent::MapHelper<shader::solidcol::PSConstants> CBConstants(deviceCtx,
+                                                                 context.mSolidColorPSO
+                                                                           .PSConstants,
+                                                                 Diligent::MAP_WRITE,
+                                                                 Diligent::MAP_FLAG_DISCARD);
+            shader::solidcol::PSConstants c;
+            Color transparent = Color(0.0f, 0.0f, 0.0f, 0.0f);
+            c.color = transparent;
+            *CBConstants = c;
+        }
+        deviceCtx->SetPipelineState(context.mSolidColorPSO.clipPSO.PSO);
+        deviceCtx->CommitShaderResources(context.mSolidColorPSO.clipPSO.SRB, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    } else {
+        switch(style.type) {
         case Style::Type::SolidColor:
         {
             {
@@ -410,8 +469,8 @@ void Shape::draw(DiligentContext& context, Style& style) {
                 c.color = style.color;
                 *CBConstants = c;
             }
-            deviceCtx->SetPipelineState(context.mSolidColorPSO.PSO);
-            deviceCtx->CommitShaderResources(context.mSolidColorPSO.SRB, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+            deviceCtx->SetPipelineState(context.mSolidColorPSO.normalPSO.PSO);
+            deviceCtx->CommitShaderResources(context.mSolidColorPSO.normalPSO.SRB, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
         }
             break;
         case Style::Type::LinearGradient:
@@ -444,6 +503,7 @@ void Shape::draw(DiligentContext& context, Style& style) {
             break;
         default:
             return;
+        }
     }
 
     Diligent::DrawIndexedAttribs DrawAttrs;
@@ -1010,6 +1070,30 @@ setupPipelineStates(Diligent::TEXTURE_FORMAT colorBufferFormat,
                             this->blendingMode, numSamples);
     mGradientPSO.recreate(mRenderDevice, mColorBufferFormat, mDepthBufferFormat,
                           this->blendingMode, numSamples);
+}
+
+void DiligentContext::specifyTextureViews(Diligent::ITextureView* RTV,
+                         Diligent::ITextureView* DSV) {
+    mDSV = DSV;
+}
+
+void DiligentContext::beginClip() {
+    if(mDSV == nullptr) {
+        std::cerr << "blazevg: Error: Depth-stencil view is not specified. Please specify with specifyTextureViews()" << std::endl;
+        exit(-1);
+    }
+    mIsClipping = true;
+    mDeviceContext->ClearDepthStencil(mDSV, Diligent::CLEAR_DEPTH_FLAG, 0.0f, 0,
+        Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+}
+
+void DiligentContext::endClip() {
+    mIsClipping = false;
+}
+
+void DiligentContext::clearClip() {
+    mDeviceContext->ClearDepthStencil(mDSV, Diligent::CLEAR_DEPTH_FLAG, 1.0f, 0,
+        Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 }
 
 } // namespace bvg

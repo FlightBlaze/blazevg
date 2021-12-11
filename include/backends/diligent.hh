@@ -355,15 +355,40 @@ private:
     int numIndices = 0;
 };
 
-class SolidColorPipelineState {
+struct PipelineStateConfiguration {
+    std::string name = "Pipeline state object";
+    Diligent::RefCntAutoPtr<Diligent::IShader> vertexShader;
+    Diligent::RefCntAutoPtr<Diligent::IShader> pixelShader;
+    Diligent::RefCntAutoPtr<Diligent::IBuffer> VSConstants;
+    Diligent::RefCntAutoPtr<Diligent::IBuffer> PSConstants;
+    Diligent::TEXTURE_FORMAT colorBufferFormat;
+    Diligent::TEXTURE_FORMAT depthBufferFormat;
+    int numSamples = 1;
+    bool isClippingMask = false;
+};
+
+struct PipelineState {
+    PipelineState(PipelineStateConfiguration conf,
+                  Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice);
+    PipelineState();
+    
+    Diligent::RefCntAutoPtr<Diligent::IPipelineState> PSO;
+    Diligent::RefCntAutoPtr<Diligent::IShaderResourceBinding> SRB;
+};
+
+class SolidColorPipelineStates {
 public:
-    SolidColorPipelineState(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+    
+    SolidColorPipelineStates(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
                             Diligent::TEXTURE_FORMAT colorBufferFormat,
                             Diligent::TEXTURE_FORMAT depthBufferFormat,
                             int numSamples = 1);
-    SolidColorPipelineState();
+    SolidColorPipelineStates();
     
     bool isInitialized = false;
+    
+    PipelineState normalPSO;
+    PipelineState clipPSO;
     
     void recreate(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
                   Diligent::TEXTURE_FORMAT colorBufferFormat,
@@ -373,8 +398,6 @@ public:
     
     Diligent::RefCntAutoPtr<Diligent::IBuffer> VSConstants;
     Diligent::RefCntAutoPtr<Diligent::IBuffer> PSConstants;
-    Diligent::RefCntAutoPtr<Diligent::IPipelineState> PSO;
-    Diligent::RefCntAutoPtr<Diligent::IShaderResourceBinding> SRB;
     Diligent::RefCntAutoPtr<Diligent::IShader> PS;
     Diligent::RefCntAutoPtr<Diligent::IShader> VS;
     int numSamples = 1;
@@ -383,13 +406,13 @@ private:
     void createShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice);
 };
 
-class GradientPipelineState {
+class GradientPipelineStates {
 public:
-    GradientPipelineState(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+    GradientPipelineStates(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
                           Diligent::TEXTURE_FORMAT colorBufferFormat,
                           Diligent::TEXTURE_FORMAT depthBufferFormat,
                           int numSamples = 1);
-    GradientPipelineState();
+    GradientPipelineStates();
     
     bool isInitialized = false;
     
@@ -401,11 +424,11 @@ public:
     
     Diligent::RefCntAutoPtr<Diligent::IBuffer> VSConstants;
     Diligent::RefCntAutoPtr<Diligent::IBuffer> PSConstants;
-    Diligent::RefCntAutoPtr<Diligent::IPipelineState> PSO;
-    Diligent::RefCntAutoPtr<Diligent::IShaderResourceBinding> SRB;
     Diligent::RefCntAutoPtr<Diligent::IShader> PS;
     Diligent::RefCntAutoPtr<Diligent::IShader> VS;
     int numSamples = 1;
+    Diligent::RefCntAutoPtr<Diligent::IPipelineState> PSO;
+    Diligent::RefCntAutoPtr<Diligent::IShaderResourceBinding> SRB;
     
 private:
     void createShaders(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice);
@@ -494,6 +517,10 @@ public:
     
     DiligentContext();
     
+    void beginClip();
+    void endClip();
+    void clearClip();
+    
     void convexFill();
     void fill();
     void stroke();
@@ -515,15 +542,22 @@ public:
                              Diligent::TEXTURE_FORMAT depthBufferFormat,
                              int numSamples);
     
+    void specifyTextureViews(Diligent::ITextureView* RTV,
+                             Diligent::ITextureView* DSV);
+    
 private:
     Diligent::RefCntAutoPtr<Diligent::IRenderDevice> mRenderDevice;
     Diligent::RefCntAutoPtr<Diligent::IDeviceContext> mDeviceContext;
     Diligent::TEXTURE_FORMAT mColorBufferFormat;
     Diligent::TEXTURE_FORMAT mDepthBufferFormat;
     
-    render::GradientPipelineState mGradientPSO;
-    render::SolidColorPipelineState mSolidColorPSO;
+    render::GradientPipelineStates mGradientPSO;
+    render::SolidColorPipelineStates mSolidColorPSO;
     render::GlyphMSDFShaders mGlyphShaders;
+    
+    Diligent::ITextureView* mDSV = nullptr;
+    
+    bool mIsClipping = false;
     
     int mNumSamples = 1;
     

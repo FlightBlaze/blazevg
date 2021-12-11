@@ -222,8 +222,9 @@ public:
     void beginPath();
     void closePath();
     
-    void beginClip();
-    void endClip();
+    virtual void beginClip();
+    virtual void endClip();
+    virtual void clearClip();
     
     virtual void convexFill();
     virtual void fill();

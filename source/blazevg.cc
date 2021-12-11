@@ -883,6 +883,18 @@ factory::ShapeMesh Context::internalStroke() {
     return mesh;
 }
 
+void Context::beginClip() {
+    
+}
+
+void Context::endClip() {
+    
+}
+
+void Context::clearClip() {
+    
+}
+
 void Context::convexFill() {
     
 }
