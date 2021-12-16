@@ -410,16 +410,12 @@ void Shape::draw(DiligentContext& context, Style& style) {
     deviceCtx->SetIndexBuffer(this->indexBuffer, 0,
         Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     
-    glm::mat4 MVP = context.viewProj * math::toMatrix3D(context.matrix);
-    
     // Draw the shape in front of other one because depth buffer is enabled.
     // When rendering, depth buffer compares current depth pixel values
     // with those written to it. If they are the same, then it will discard
     // them, so we need to constantly increment the Z coordinate
-    MVP = glm::translate(glm::mat4(1.0f),
-                         glm::vec3(0.0f, 0.0f, 1.0f -
-                                   ((float)context.mShapeDrawCounter + 1.0f) * 0.000001f)
-                         ) * MVP;
+    
+    glm::mat4 MVP = context.getMatrix3D();
     
     if(context.mIsClipping) {
         {
@@ -614,6 +610,17 @@ GlyphMSDFShaders::GlyphMSDFShaders()
 
 } // namespace render
 
+glm::mat4 DiligentContext::bringToFrontMatrix(glm::mat4 MVP) {
+    return glm::translate(
+        glm::vec3(0.0f, 0.0f, 1.0f -
+                  ((float)mShapeDrawCounter + 1.0f) * 0.000001f)
+        ) * MVP;
+}
+
+glm::mat4 DiligentContext::getMatrix3D() {
+    return bringToFrontMatrix(this->viewProj * math::toMatrix3D(this->matrix));
+}
+
 void DiligentContext::convexFill() {
     this->assertDrawingIsBegan();
     factory::ShapeMesh mesh = internalConvexFill();
@@ -642,7 +649,7 @@ void DiligentContext::textFill(std::wstring str, float x, float y) {
     
     float scale = fontSize / (float)font->size;
     glm::vec2 pos = glm::vec2(x, y);
-    glm::mat4 transform = this->viewProj * math::toMatrix3D(this->matrix);
+    glm::mat4 transform = getMatrix3D();
     
     DiligentFont* fnt = static_cast<DiligentFont*>(this->font);
     fnt->recreatePipelineState(mColorBufferFormat,
@@ -720,6 +727,7 @@ void DiligentContext::textFill(std::wstring str, float x, float y) {
 
         pos.x += (float)character.advance * scale;
     }
+    mShapeDrawCounter++;
 }
 
 float tAtLengthClosed(float length, std::vector<float> lengths, float fullLength, bool closed) {
@@ -742,7 +750,7 @@ void DiligentContext::textFillOnPath(std::wstring str, float x, float y) {
     
     float scale = fontSize / (float)font->size;
     float length = x;
-    glm::mat4 transform = this->viewProj * math::toMatrix3D(this->matrix);
+    glm::mat4 transform = getMatrix3D();
     
     std::vector<float> polylineLengths = factory::measurePolyline(polyline);
     float polylineLength = 0;
@@ -853,6 +861,7 @@ void DiligentContext::textFillOnPath(std::wstring str, float x, float y) {
 
         length += (float)character.advance * scale;
     }
+    mShapeDrawCounter++;
 }
 
 float DiligentContext::measureTextWidth(std::wstring str) {
@@ -996,7 +1005,7 @@ void DiligentFont::recreatePipelineState(Diligent::TEXTURE_FORMAT colorBufferFor
     PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = Diligent::PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = Diligent::CULL_MODE_NONE;
     PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.StencilEnable = Diligent::True;
-    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = Diligent::False;
+    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = Diligent::True;
 
     Diligent::BlendStateDesc BlendState;
     BlendState.RenderTargets[0].BlendEnable = Diligent::True;

@@ -561,6 +561,9 @@ private:
     
     int mNumSamples = 1;
     
+    glm::mat4 bringToFrontMatrix(glm::mat4 MVP);
+    glm::mat4 getMatrix3D();
+    
     void initPipelineState();
 };
 
