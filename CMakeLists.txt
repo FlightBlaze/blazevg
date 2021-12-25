@@ -4,8 +4,10 @@ set (CMAKE_CXX_STANDARD 17)
 project ("blazevg")
 
 set (BLAZEVG_SOURCES
+    "include/blazevgc.h"
     "include/blazevg.hh"
     "include/backends/diligent.hh"
+    "source/blazevgc.c"
     "source/blazevg.cc"
     "source/backends/diligent.cc")
 

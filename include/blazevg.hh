@@ -230,8 +230,8 @@ public:
     virtual void fill();
     virtual void stroke();
     
-    virtual void textFill(std::wstring str, float x, float y);
-    virtual void textFillOnPath(std::wstring str, float x = 0, float y = 0);
+    virtual void print(std::wstring str, float x, float y);
+    virtual void printOnPath(std::wstring str, float x = 0, float y = 0);
     
     virtual float measureTextWidth(std::wstring str);
     virtual float measureTextHeight();

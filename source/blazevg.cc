@@ -907,11 +907,11 @@ void Context::stroke() {
     
 }
 
-void Context::textFill(std::wstring str, float x, float y) {
+void Context::print(std::wstring str, float x, float y) {
     
 }
 
-void Context::textFillOnPath(std::wstring str, float x, float y) {
+void Context::printOnPath(std::wstring str, float x, float y) {
     
 }
 

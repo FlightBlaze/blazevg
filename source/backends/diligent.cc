@@ -643,7 +643,39 @@ void DiligentContext::stroke() {
     shape.draw(*this, this->strokeStyle);
 }
 
-void DiligentContext::textFill(std::wstring str, float x, float y) {
+void DiligentContext::test() {
+    this->assertDrawingIsBegan();
+    vg_context ctx;
+    ctx.path.size = 0;
+    ctx.path.data = NULL;
+    vg_move_to(&ctx, 20, 20);
+    vg_line_to(&ctx, 40, 40);
+    vg_line_to(&ctx, 10, 30);
+    vg_submesh_list** submeshes = vg_create_stroke(&ctx.path);
+    vg_mesh cmesh;
+    vg_create_mesh(&cmesh, submeshes);
+    
+    factory::ShapeMesh mesh;
+    mesh.vertices.resize(cmesh.verts.size);
+    for(int i = 0; i < cmesh.verts.size; i++) {
+        mesh.vertices[i].x = cmesh.verts.data[i].x;
+        mesh.vertices[i].y = cmesh.verts.data[i].y;
+    }
+    mesh.indices.resize(cmesh.tris.size);
+    for(int i = 0; i < cmesh.tris.size; i++) {
+        mesh.indices[i].a = cmesh.tris.data[i].a;
+        mesh.indices[i].b = cmesh.tris.data[i].b;
+        mesh.indices[i].c = cmesh.tris.data[i].c;
+    }
+    render::Shape shape = render::Shape(mRenderDevice, mesh);
+    shape.draw(*this, this->strokeStyle);
+    
+    vg_free_submesh_list(&submeshes);
+    vg_clear_mesh(&cmesh);
+    vg_clear_polyline_array(&ctx.path);
+}
+
+void DiligentContext::print(std::wstring str, float x, float y) {
     this->assertDrawingIsBegan();
     assert(this->font != nullptr);
     
@@ -742,7 +774,7 @@ float tAtLengthClosed(float length, std::vector<float> lengths, float fullLength
     return factory::tAtLength(length, lengths);
 }
 
-void DiligentContext::textFillOnPath(std::wstring str, float x, float y) {
+void DiligentContext::printOnPath(std::wstring str, float x, float y) {
     this->assertDrawingIsBegan();
     assert(this->font != nullptr);
     

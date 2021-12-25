@@ -13,6 +13,10 @@
 #include <Graphics/GraphicsEngine/interface/SwapChain.h>
 #include <Common/interface/RefCntAutoPtr.hpp>
 
+extern "C" {
+#include <blazevgc.h>
+}
+
 namespace bvg {
 
 namespace shader {
@@ -525,8 +529,8 @@ public:
     void fill();
     void stroke();
     
-    void textFill(std::wstring str, float x, float y);
-    void textFillOnPath(std::wstring str, float x = 0, float y = 0);
+    void print(std::wstring str, float x, float y);
+    void printOnPath(std::wstring str, float x = 0, float y = 0);
     
     float measureTextWidth(std::wstring str);
     float measureTextHeight();
@@ -544,6 +548,8 @@ public:
     
     void specifyTextureViews(Diligent::ITextureView* RTV,
                              Diligent::ITextureView* DSV);
+    
+    void test();
     
 private:
     Diligent::RefCntAutoPtr<Diligent::IRenderDevice> mRenderDevice;
