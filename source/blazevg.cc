@@ -439,6 +439,106 @@ float tAtLength(float length, std::vector<float>& lengths) {
     return t;
 }
 
+std::vector<float> divideDashRight(std::vector<float>& dash, float l) {
+    std::vector<float> newDash;
+    float currentLength = 0;
+    float currentNumber;
+    for(int i = dash.size() - 1; i >= 0; i--) {
+        currentNumber = dash.at(i);
+        if(currentNumber + currentLength <= l)
+            newDash.push_back(currentNumber);
+        else {
+            newDash.push_back(l - currentLength);
+            break;
+        }
+        currentLength += currentNumber;
+    }
+    
+    // Add zero fill to make sure the first number is gap
+    if(newDash.size() % 2 != 0)
+        newDash.push_back(0.0f);
+    
+    std::reverse(newDash.begin(), newDash.end());
+    return newDash;
+}
+
+std::vector<std::vector<glm::vec2>> dashedPolylineNew(std::vector<glm::vec2>& points,
+                                                   std::vector<float>& dash,
+                                                      float offset) {
+    std::vector<std::vector<glm::vec2>> lines;
+    std::vector<glm::vec2> currentPath = points;
+    
+    if(dash.size() < 2) {
+        return { currentPath };
+    }
+    
+    float fullLength = 0;
+    for(int i = 0; i < dash.size(); i++)
+        fullLength += dash.at(i);
+    
+    float offsetTimes = floorf(fabsf(offset) / fullLength);
+    float localOffset = fabsf(offset) - offsetTimes * fullLength;
+    if(offset < 0)
+        localOffset = fullLength - localOffset;
+    
+    std::vector<float> startDash;
+    std::vector<float>* curDash = &startDash;
+    
+    if(offset == 0) {
+        curDash = &dash;
+    } else {
+        startDash = divideDashRight(dash, localOffset);
+    }
+    
+    bool isStartTooShort = true;
+    for(int i = 0; i < startDash.size(); i++) {
+        if(startDash.at(i) > 0.1f) {
+            isStartTooShort = false;
+            break;
+        }
+    }
+    if(isStartTooShort)
+        curDash = &dash;
+    
+    int dashIndex = 0;
+    static const int maxDashes = 999;
+    for(int i = 0; i < maxDashes; i++) {
+        float dashLength, gapLength;
+        dashLength = curDash->at(dashIndex);
+        gapLength = curDash->at(dashIndex + 1);
+        
+        std::vector<float> lengths = measurePolyline(currentPath);
+        
+        if(dashLength == 0) {
+            currentPath = dividePolyline(currentPath, tAtLength(gapLength, lengths)).second;
+            if(currentPath.size() < 2)
+                break;
+        } else {
+            TwoPolylines twoPathes = dividePolyline(currentPath, tAtLength(dashLength, lengths));
+            if(twoPathes.first.size() < 2)
+                break;
+            lines.push_back(twoPathes.first);
+            if(twoPathes.second.size() < 2)
+                break;
+            std::vector<float> secondLengths = measurePolyline(twoPathes.second);
+            currentPath = dividePolyline(twoPathes.second, tAtLength(gapLength,
+                                                                     secondLengths)).second;
+            if(currentPath.size() < 2)
+                break;
+        }
+        dashIndex+=2;
+        if(dashIndex + 1 >= curDash->size()) {
+            curDash = &dash;
+            dashIndex = 0;
+        }
+    }
+    
+    if(lines.size() == 0)
+        return { currentPath };
+    
+    return lines;
+}
+
 std::vector<std::vector<glm::vec2>> dashedPolyline(std::vector<glm::vec2>& points,
                                                    float dashLength, float gapLength,
                                                    float offset) {
@@ -734,11 +834,19 @@ factory::ShapeMesh Context::internalStroke() {
         float currentLength = 0.0f;
         
         for(int i = 0; i < this->mPolylines.size(); i++) {
-            std::vector<std::vector<glm::vec2>> dashed =
-                factory::dashedPolyline(this->mPolylines[i],
-                                        this->lineDash.length,
-                                        gapLength,
-                                        this->lineDash.offset - currentLength);
+            std::vector<std::vector<glm::vec2>> dashed;
+            if(this->lineDash.dash.size() > 1) {
+                dashed =
+                    factory::dashedPolylineNew(this->mPolylines[i],
+                                            this->lineDash.dash,
+                                            this->lineDash.offset - currentLength);
+            } else {
+                dashed =
+                    factory::dashedPolyline(this->mPolylines[i],
+                                            this->lineDash.length,
+                                            gapLength,
+                                            this->lineDash.offset - currentLength);
+            }
             allPolylines->insert(allPolylines->end(), dashed.begin(), dashed.end());
             currentLength += factory::lengthOfPolyline(this->mPolylines[i]);
         }

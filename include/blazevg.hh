@@ -84,6 +84,7 @@ struct LineDash {
     LineDash();
     LineDash(float length, float gapLength, float offset = 0.0f);
     float length, gapLength, offset;
+    std::vector<float> dash;
 };
 
 enum class BlendingMode : int {
